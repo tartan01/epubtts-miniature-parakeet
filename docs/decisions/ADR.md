@@ -242,6 +242,72 @@
 
 ---
 
+## ADR-027 · 阅读器是 `mini/` 的一个模式，不新建第三条产品线
+
+**背景**：用户要求"在 v0.5 基础上再做一个版本，把它叫做阅读器"——边看 EPUB 文字、边听朗读、
+同时后台生成后面章节的语音。
+
+**决策**：阅读器 = 同一个 `BookCtl.Mini.exe` 的 `reader` 模式（`reader` 子命令 / `--reader` /
+文件名 `BookCtl.Reader.exe` 自动判定）。复用 `audio::parse_epub`、`Config`、JSON envelope、
+安装器 stub，只新增 `mini/src/reader.rs` 一个模块 + 第三个 setup.exe。
+
+**为什么**：如果新建第三条代码线，会出现三份 EPUB 解析、三份 SAPI 调用、三份配置读取，
+与 v0.4 刚清理掉的"结构混乱"问题反向。单 exe 多模式让"再做一个版本"的成本只剩一个模块 + 一个包。
+
+**代价**：阅读器与批量模式共享同一个进程体积（664 KB，其中大部分是 Win32 FFI 与 EPUB 解析）；
+阅读器无法用 Full 的模型做单段合成（Full CLI 只有整本流水线），见 ADR-028。
+
+---
+
+## ADR-028 · 同步粒度定为段落，不做字级
+
+**备选**：
+- 整章合成后才开播 → 用户点播放要等整章（数秒到数十秒），违背"边看边读"。
+- 字级同步（SAPI `SpeakProgress` 时间戳 + `waveOut` 定位偏移）→ 视觉最细腻，但要手写
+  `waveOut` 回调、处理 WAV 采样率换算，且 `SpeakProgress` 在 PowerShell 封装下不可靠。
+- **段落级**：合成单位 = `parse_epub` 拆出的自然段（约 12–110 字），一段一个 WAV。
+
+**决策**：段落级。每段独立 WAV、独立缓存、独立播放；播完自动推进游标。
+
+**为什么**：① 人的阅读节奏天然按段落走，高亮一段足够自然；② 单段合成 0.6 秒，
+预取窗口天然成立；③ 保持零外部 crate、零 COM 手写、零 `waveOut` 复杂度。
+
+**代价**：段内不做逐字高亮。若将来要字级，需引入 `SpeakProgress` 或换引擎，另开 ADR。
+
+---
+
+## ADR-029 · 预取窗口：默认 6 段 + 强制伸进下一章前 2 段
+
+**决策**：`window_end = max(cursor + prefetch, next_chapter_first + 2)`，默认 `prefetch = 6`，
+GUI 可调 2/4/6/10/16。
+
+**为什么**：用户原话是"边读它同时在生成后面的章节"。只在当前章内预取，读完本章最后一段就会卡住
+等下一章；强制把下一章前 2 段纳入窗口，跨章时永远不会断流。窗口有上限（不会退化成整本合成），
+所以内存/磁盘占用可控，跳读时也只需丢弃窗口外的排队。
+
+**缓存**：按「规范化绝对路径 + 文件大小 + 语速」做 FNV-1a key，跨会话复用；
+跳读用 `gen` 代际号让旧位置的在途合成结果只写缓存、不改当前窗口状态。
+
+---
+
+## ADR-030 · 播放用动态加载 `winmm.dll`，不新增链接依赖
+
+**备选**：
+- `#[link(name = "winmm")] extern PlaySoundW` → 需要 `winmm.lib` 在 rust-lld 自包含导入库目录里，
+  不确定，且换工具链可能失败。
+- 手写 `waveOutOpen/waveOutWrite` → 精确控制，但代码量大且要处理缓冲区复用。
+- **`LoadLibraryW("winmm.dll")` + `GetProcAddress("PlaySoundW")`**，只取一个函数指针。
+
+**决策**：动态加载。`SND_FILENAME | SND_NODEFAULT` 在播放线程同步播放（播完返回 → 推进游标），
+暂停用 `SND_PURGE` 立即打断。
+
+**为什么**：不扩大导入表、不依赖导入库存在性、链接参数完全不变（`rust-lld` + `link-self-contained`
+继续成立）。代价是函数指针需要 `OnceLock` 缓存且不能 `FreeLibrary`（进程生命周期内保持加载）。
+
+**验收**：`reader --play-test` → `status=played`、`play_ms=8601`、`playback_available=true`。
+
+---
+
 ## 待拍板 / 未决
 
 | 编号 | 议题 | 状态 |

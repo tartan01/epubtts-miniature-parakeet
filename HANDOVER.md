@@ -15,7 +15,7 @@
 （`book.m4b` + 每章 `audio.wav/m4a` + `manifest.json`），带实时中控台、断点续传、设备选择、模型源管理，
 并已有可发布的便携版 zip。
 
-版本：主线 **v0.3.0**，Mini 轻量产品线 **v0.5.0**。远端 `main` 已推送到
+版本：主线 **v0.3.0**，Mini 轻量产品线 **v0.6.0**（含阅读器）。远端 `main` 已推送到
 `git@github.com:tartan01/epubtts-miniature-parakeet.git`。
 
 **2026-11-24 晚增量（v0.4）**：新增 EPUB 拖放导入（两种模式通用）、统一 `ImportEpub` 入口、
@@ -29,8 +29,19 @@ GUI 保留全部按钮并支持拖入 `.epub` / `config.json`；CLI/MCP 契约�
 用户目录、快捷方式、`.epub` 关联，两阶段卸载保留用户数据。
 详见 README **§10**、架构 MD **附录 C**、ADR-021~026、`docs/defects.md` #22–#26。
 
-> 用户已明确「等一下会拿另一台电脑传过去测试」：可直接拷 `dist/release/` 下两个 setup.exe，
+> 用户已明确「等一下会拿另一台电脑传过去测试」：可直接拷 `dist/release/` 下 setup.exe，
 > 验收步骤见 README §10.2。
+
+**2026-11-24 夜增量（v0.6，本轮）**：新增**阅读器模式** —— 边看 EPUB 正文、边听当前段落朗读，
+后台只预生成「当前位置往后 6 段 + 下一章前 2 段」。用户的核心观察是「人看肯定没有机器合成快」，
+所以窗口化预取就够，不需要整本合成完再听。
+落地方式：`mini/src/reader.rs` 一个模块 + `reader` 子命令 + 第三个 `setup.exe`（主 exe 改名
+`BookCtl.Reader.exe`，双击即进阅读器），**不新建第三条代码线**（ADR-027）。
+同步粒度定为**段落**（ADR-028），播放用动态加载 `winmm.dll::PlaySoundW`（ADR-030）。
+详见 README **§11**、架构 MD **附录 D**、ADR-027~030、`docs/defects.md` #27–#30。
+
+> 本轮实测：单段合成 572–637 ms（人读一段要 3–15 秒）、`--play-test` 同步播完 8.6 秒、
+> 跨章预取命中、卸载保留 `ReaderCache`、双击自动恢复上次书目。截图 `docs/screenshots/10/11`。
 
 ---
 
@@ -40,12 +51,12 @@ GUI 保留全部按钮并支持拖入 `.epub` / `config.json`；CLI/MCP 契约�
 |---|---|---|
 | ★★★ | `HANDOVER.md`（本文件） | 现状、怎么跑、代码地图、坑、下一步 |
 | ★★★ | `AGENTS.md` | 仓库级 AI 工作约定：必须遵守的构建/提交/契约规则 |
-| ★★★ | `architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3 + **附录 C v0.5 mini**）。任何设计变更先改它 |
+| ★★★ | `architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3 + **附录 C v0.5 mini** + **附录 D v0.6 阅读器**）。任何设计变更先改它 |
 | ★★★ | `README.md` | 用户向说明、命令速查、实现边界、§7 缺陷台账、**§10 Mini 与跨机测试** |
 | ★★ | `docs/workflows/` | 7 份流程文档：构建运行 / 流水线 / 控制面 / 设备与源 / TTS 引擎 / 封装（含 mini）/ 验收 |
 | ★★ | `docs/decisions/ADR.md` | 技术决策台账（ADR-001~026，含 mini 的 021~026） |
-| ★★ | `docs/defects.md` | 26 条缺陷/问题台账（含 mini 的 #22–#26；现象 → 根因 → 修法 → 验证） |
-| ★★ | `docs/roadmap.md` | 未完成事项与建议推进顺序（R-13 轻量产品线已落地；R-14/15/16 待办） |
+| ★★ | `docs/defects.md` | 30 条缺陷/问题台账（含 mini 的 #22–#26、阅读器的 #27–#30；现象 → 根因 → 修法 → 验证） |
+| ★★ | `docs/roadmap.md` | 未完成事项与建议推进顺序（R-13 轻量产品线、R-17 阅读器已落地；R-14/15/16/18 待办） |
 | ★★ | `docs/environment.md` | 本机环境快照、绝对路径、版本、网络限制（含 Rust 工具链） |
 | ★ | `docs/conversation/01-full-dialogue.md` | 本期完整对话（用户 7 轮 + 助手 112 条回复 + 系统事件） |
 | ★ | `docs/conversation/02-context-summaries.md` | 上下文压缩的历史摘要（补齐全量背景） |
@@ -150,7 +161,7 @@ bookctl.sln
 ├── testdata/测试之书.epub       自造 3 章中文 EPUB（2.6 KB，验收用）
 └── tools/export_session.py     会话转录 → Markdown 交接文档导出器
 
-mini/                           ← v0.5 独立 Rust 产品线（不引用 src/ 任何代码）
+mini/                           ← v0.5+ 独立 Rust 产品线（不引用 src/ 任何代码）
 ├── README.md                   mini 的模块说明 / 构建 / 契约 / 已知边界
 ├── .cargo/config.toml          rust-lld + link-self-contained（免 MSVC/SDK）
 ├── Cargo.toml / Cargo.lock     单 crate、零外部依赖
@@ -160,7 +171,8 @@ mini/                           ← v0.5 独立 Rust 产品线（不引用 src/ 
 ├── src/win32.rs                手写 Win32 FFI（kernel32/user32/comctl32/comdlg32/shell32/gdi32/advapi32）
 ├── src/ui.rs                   原生窗口、WM_TIMER 快照刷新、拖放、进度条、日志
 ├── src/model.rs                运行配置 + 8 下载源 + 4 模型 + 测速/下载/切源/选盘
-├── src/audio.rs                EPUB→SAPI WAV；delegate_full() 委托 Full CLI
+├── src/audio.rs                EPUB→SAPI WAV；synth_paragraph() 单段合成；delegate_full() 委托 Full CLI
+├── src/reader.rs               ★ v0.6 阅读器：段落游标 + 跨章预取窗口 + 播放线程 + 三栏 Win32 窗口
 ├── src/util.rs                 手写 JSON 解析/序列化 + envelope（无 serde）
 └── setup/main.rs               自解压安装器（PE overlay → HKCU → 快捷方式 → 两阶段卸载）
 ```
@@ -223,7 +235,7 @@ Rust/std only，不引用 `src/`，只通过 CLI 契约与 Full 主线通信（�
 | 9 | 中文路径 / EPUB `mimetype` 顺序 / zip 内反斜杠 | 测试 EPUB 用 Python `zipfile` 生成，`mimetype` 第一个且不压缩、路径统一 `/` |
 | 10 | `BOOKCTL_WORKSPACE` 一改，旧实现里模型源跟着漂移 | `SourcesRoot` 已固定为 `%LOCALAPPDATA%\bookctl\sources`（便携版由 marker 覆盖） |
 
-完整 26 条缺陷/问题台账见 `docs/defects.md` 与 `README.md §7.1`（#22–#26 为 v0.5 Mini）。
+完整 30 条缺陷/问题台账见 `docs/defects.md` 与 `README.md §7.1`（#22–#26 为 v0.5 Mini，#27–#30 为 v0.6 阅读器）。
 
 ---
 
@@ -255,6 +267,20 @@ Rust/std only，不引用 `src/`，只通过 CLI 契约与 Full 主线通信（�
 | setup.exe | Mini 722,886 B；Full 206,942,031 B |
 | 安装/卸载 | HKCU + Uninstall + `.epub` 关联 + 两处快捷方式全核验；两阶段卸载后 5 项全 False |
 
+**v0.6 阅读器实测基线（对照用）**：
+
+| 项目 | 基线值 |
+|---|---|
+| 主程序 | `BookCtl.Mini.exe` / `BookCtl.Reader.exe` **679,936 B（664 KB）** |
+| `reader --dry-run` | 3 章 / 14 段 / 362 字；`prefetch=6` → `window_end=7`（已伸进第 2 章） |
+| 单段合成 | **572–637 ms/段**（SAPI），5 段共 1,642,704 B |
+| 缓存 | 第二次全命中（`cache_hits=5/5`，0 ms）；相对/绝对路径同一 `cache_dir` |
+| 跨章预取 | `--from 3 --count 5` → 段 6/7/8 属第 2 章 |
+| 播放 | `--play-test` → `status=played`、`play_ms=8601`、`playback_available=true` |
+| MCP | `tools/list` **9 个**（+reader_open/prefetch/status） |
+| setup.exe | Mini 761,141 B / 阅读器 720,628 B / Full 206,943,055 B |
+| 阅读器卸载 | 目录+注册表+两处快捷方式+ProgId 全 False；**`ReaderCache` 3 个 WAV 保留** |
+
 ---
 
 ## 8. 还没做（接手后从这里开始）
@@ -268,7 +294,11 @@ Rust/std only，不引用 `src/`，只通过 CLI 契约与 Full 主线通信（�
 - **P2 · S5 ASR 回验闭环**（faster-whisper）、M4B 两遍 loudnorm、音色一致性 A/B 盲测。
 - **P2 · Pro 版差异化**：`Edition` 字段已预留，尚未做功能门禁。
 - **R-13 独立轻量产品线：✅ 已完成（v0.5）**。用户已拍板 A 路线，`mini/` 落地并验收，
-  两个 setup.exe 已产出。跨另一台电脑的实测由用户进行（**R-16**，步骤见 README §10.2）。
+  setup.exe 已产出。跨另一台电脑的实测由用户进行（**R-16**，步骤见 README §10.2）。
+- **R-17 阅读器：✅ 已完成（v0.6）**。段落级同步 + 跨章预取 + 播放闭环 + 第三个安装包全部实测。
+  后续可做：**R-18** 给 Full 加单段合成接口，让阅读器直接用模型音质朗读（当前阅读器只走 SAPI）。
+- **P3 · 阅读器视觉**：正文段落级高亮已可用，但没有逐字高亮与翻页动画；
+  EPUB 里的图片/脚注未渲染（只显示纯文本正文）。
 - **R-14 · Mini 直接调用本地模型权重**：目前 Mini 只在「检测到 Full」时委托 Full CLI；
   模型已下载但 Full 未安装时仍走 SAPI，不能直接加载权重。需先与用户确认是否接受
   Mini 不再是「单文件零依赖」（见 `docs/roadmap.md`）。

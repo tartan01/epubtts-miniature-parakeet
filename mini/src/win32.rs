@@ -5,6 +5,7 @@
 use std::ffi::c_void;
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::OnceLock;
 
 pub type HWND = isize;
 pub type HANDLE = isize;
@@ -38,6 +39,11 @@ pub const CB_SETCURSEL: u32 = 0x014E;
 pub const CB_GETCOUNT: u32 = 0x0146;
 pub const LB_ADDSTRING: u32 = 0x0180;
 pub const LB_RESETCONTENT: u32 = 0x0184;
+pub const LB_GETCURSEL: u32 = 0x0188;
+pub const LB_SETCURSEL: u32 = 0x0186;
+pub const LBS_NOTIFY: u32 = 0x0001;
+pub const LBN_SELCHANGE: i32 = 1;
+pub const EM_SCROLLCARET: u32 = 0x00B7;
 pub const EM_SETSEL: u32 = 0x00B1;
 pub const EM_REPLACESEL: u32 = 0x00C2;
 pub const EM_SETREADONLY: u32 = 0x00CF;
@@ -176,6 +182,9 @@ extern "system" {
     fn Sleep(ms: u32);
     fn GetTickCount64() -> u64;
     fn GetTempPathW(n: u32, buf: *mut u16) -> u32;
+    fn LoadLibraryW(name: *const u16) -> isize;
+    fn GetProcAddress(h: isize, name: *const u8) -> *mut c_void;
+    fn FreeLibrary(h: isize) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -215,6 +224,7 @@ extern "system" {
     fn SetWindowLongPtrW(hwnd: HWND, idx: i32, val: isize) -> isize;
     fn GetWindowLongPtrW(hwnd: HWND, idx: i32) -> isize;
     fn InvalidateRect(hwnd: HWND, r: *const Rect, erase: i32) -> i32;
+    fn SetFocus(hwnd: HWND) -> HWND;
 }
 
 #[link(name = "gdi32")]
@@ -551,6 +561,62 @@ pub fn exe_dir() -> PathBuf {
 }
 
 // ---------------- 注册表（HKCU，无需管理员） ----------------
+// ---------------- 列表控件 / 文本选择 ----------------
+pub fn list_add(hwnd: HWND, s: &str) -> i32 {
+    let w = wide(s);
+    send(hwnd, LB_ADDSTRING, 0, w.as_ptr() as LPARAM) as i32
+}
+pub fn list_clear(hwnd: HWND) { send(hwnd, LB_RESETCONTENT, 0, 0); }
+pub fn list_sel(hwnd: HWND) -> i32 { send(hwnd, LB_GETCURSEL, 0, 0) as i32 }
+pub fn set_list_sel(hwnd: HWND, i: i32) { send(hwnd, LB_SETCURSEL, i.max(0) as WPARAM, 0); }
+/// 只读 EDIT 里选中 [start,end) 字符实现"当前段落高亮"。
+pub fn set_sel(hwnd: HWND, start: isize, end: isize) {
+    send(hwnd, EM_SETSEL, start.max(0) as WPARAM, end.max(0) as LPARAM);
+}
+pub fn scroll_caret(hwnd: HWND) { send(hwnd, EM_SCROLLCARET, 0, 0); }
+/// 让只读 EDIT 取得焦点：失焦时选中高亮不渲染，当前朗读段落会"看不见"。
+pub fn focus(hwnd: HWND) { unsafe { SetFocus(hwnd); } }
+
+// ---------------- WAV 播放（动态加载 winmm.dll）----------------
+// 不新增 #[link] 依赖：rust-lld 自包含链接目录里未必有 winmm.lib，
+// 用 LoadLibraryW + GetProcAddress 在运行期取 PlaySoundW 更稳，且零额外导入表。
+type PlaySoundWFn = unsafe extern "system" fn(*const u16, isize, u32) -> i32;
+const SND_FILENAME: u32 = 0x0002_0000;
+const SND_NODEFAULT: u32 = 0x0000_0002;
+const SND_PURGE: u32 = 0x0000_0040;
+
+static PLAYSOUND: OnceLock<Option<PlaySoundWFn>> = OnceLock::new();
+fn playsound_fn() -> Option<PlaySoundWFn> {
+    unsafe {
+        let dll = wide("winmm.dll");
+        let h = LoadLibraryW(dll.as_ptr());
+        if h == 0 { return None; }
+        let p = GetProcAddress(h, b"PlaySoundW\0".as_ptr());
+        if p.is_null() { FreeLibrary(h); return None; }
+        // 故意不 FreeLibrary：函数指针要在进程生命周期内一直有效。
+        Some(std::mem::transmute::<*mut c_void, PlaySoundWFn>(p))
+    }
+}
+/// 同步播放一个 WAV 文件，播完才返回；失败返回 false。
+pub fn play_wav_sync(path: &str) -> bool {
+    match PLAYSOUND.get_or_init(playsound_fn) {
+        Some(f) => {
+            let w = wide(path);
+            unsafe { f(w.as_ptr(), 0, SND_FILENAME | SND_NODEFAULT) != 0 }
+        }
+        None => false,
+    }
+}
+/// 立刻停止当前播放（暂停按钮用），使同步播放线程尽快返回。
+pub fn stop_wav() {
+    if let Some(Some(f)) = PLAYSOUND.get() {
+        unsafe { f(std::ptr::null(), 0, SND_PURGE); }
+    }
+}
+pub fn wav_playback_available() -> bool {
+    PLAYSOUND.get_or_init(playsound_fn).is_some()
+}
+
 pub fn reg_open_or_create(root: HKEY, sub: &str) -> Result<HKEY, String> {
     let w = wide(sub);
     let mut h: HKEY = 0; let mut disp = 0u32;

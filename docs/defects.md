@@ -173,3 +173,24 @@
 | `reg.exe` 被宿主安全策略禁用 | 不绕过；改用 `Test-Path` 与 `[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey()` 核验 |
 | Full 便携包带 `portable.marker`，装成安装版后数据仍写程序目录 | 安装器 `extract()` 后删除 marker，数据改走 `%LOCALAPPDATA%` |
 | 非交互宿主里双击卸载会弹「卸载完成」MessageBox 并阻塞 | 自动化验收统一用 `/UNINSTALL /S`；真实桌面双击点掉弹窗即可 |
+
+---
+
+## 2026-11-24 夜 · v0.6 阅读器（#27–#30）
+
+| # | 现象 | 根因 | 处理 / 验证 |
+|---|---|---|---|
+| 27 | `reader --dry-run` / MCP `book_inspect` / `job_start` 的 stdout 里，JSON 信封**前面多出一行**「解析完成：《…》· 3 章 · 362 字」 | `NullReporter::log()` 写的是 `println!` 而不是空实现。MCP stdio 与 CLI 都把 stdout 当协议通道，任何非协议文本都会破坏 JSON-RPC 流 / 让 `jq` 解析失败。v0.5 之前的 MCP 实测只跑了 `tools/list`（不触发 log），所以一直没暴露 | `NullReporter::log` 改为彻底静默。验证：`book_inspect` 与 `reader status` 的 stdout 只有一行纯净 JSON；MCP 9 个 tools 的 `tools/call` 全部正常 |
+| 28 | 同一本书用 `testdata/测试之书.epub`（CLI 习惯写法）与 `testdata\测试之书.epub`（PowerShell 路径）分别调用，生成**两份缓存**、重复合成 | 缓存 key 直接用了调用方传入的原始路径字符串。相对/绝对、`/` 与 `\`、大小写差异都会算出不同 FNV 值 | `cache_dir_for()` 先用 `fs::canonicalize()` 转绝对路径再算 key。验证：相对与绝对路径两次调用 → `cache_dir` 完全相同，第二次 `cache_hits=3` |
+| 29 | **（设计阶段发现，未上线）** 阅读器版安装目录定为 `…\本地朗读工厂\Reader`，而缓存一开始也放在 `…\Reader\cache` | 卸载器对安装目录做 `remove_dir_all`，缓存放在里面等于**卸载即删用户已生成的朗读缓存** | 缓存目录独立为 `…\本地朗读工厂\ReaderCache\`。验证：卸载后 `dir_exists=False` 但 `cache_wav` 数量 3 → 3 不变 |
+| 30 | 只读多行 EDIT 里用 `EM_SETSEL` 高亮当前朗读段落，窗口打开后**看不到高亮** | Win32 的只读 EDIT 在**失去焦点**时不渲染选中背景（`HideSelection` 默认为 true） | 创建完控件后 `SetFocus(edit_text)`；截图中当前段落显示为蓝色选中块。另一种做法是 `EM_HIDESELECTION`，但给焦点更简单且不影响按钮点击 |
+
+### 阅读器相关的判断（避免下一轮走回头路）
+
+| 判断 | 说明 |
+|---|---|
+| **不要**为了"精确到字"去订阅 SAPI `SpeakProgress` | 经 PowerShell 封装后时间戳不可靠；段落级已足够（ADR-028）。 |
+| **不要**把整本书一次合成完再开播 | 用户要的是"边看边读"，整本合成让第一句要等几十秒；预取窗口才是正解（ADR-029）。 |
+| **不要**改成 `#[link(name="winmm")]` | 动态加载保证 `rust-lld` 自包含链接不依赖 `winmm.lib` 是否存在（ADR-030）。 |
+| **不要**把 `ReaderCache` 并回 `Reader` | 会重现 #29 的卸载删数据问题。 |
+| 生成线程遇到 `Failed` 段不会自动重试 | 避免坏段无限重试刷日志；GUI 的「重合成本段」是显式重试入口。 |

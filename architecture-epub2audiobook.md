@@ -559,7 +559,7 @@ mini/                                  # 独立 Rust 产品线，不引用 src/ 
 
 packaging/
 ├── install-toolchain.cmd              # 一键装 Rust GNU 工具链（rsproxy.cn 镜像，失败回退官方）
-└── make-installer.ps1                 # 把便携包 zip 追加到 stub 尾部，产出 Mini / Full 两个 setup.exe
+└── make-installer.ps1                 # 把便携包 zip 追加到 stub 尾部，产出 Mini / 阅读器 / Full 三个 setup.exe（v0.6）
 ```
 
 > 落地时把早期草图的 `config/json/catalog/download/install/epub/tts/wav/cli/mcp` 九个模块
@@ -622,7 +622,7 @@ packaging/
 | EPUB 解析 | `《测试之书》· 3 章 · 362 字`（dry-run） |
 | 系统语音路径 | SAPI 真实生成 `status=completed` / 3 章 / 14 段 / **94.56 s** / `wav_bytes=8,340,024`；产出 `book.wav` + 3 分章 WAV + manifest + chapters.txt |
 | 委托 Full 路径 | 检测到 `HKCU\...\Full\CliPath` → 委托 Full CLI；修复后返回 `chapters=3 / paragraphs=14 / seconds=10.1 / engine=mock-via-Full / wav_bytes≈681,002`，manifest 含 3 条真实章节 |
-| 安装器 stub | 369,664 B；两个 setup.exe：Mini **722,886 B（0.7 MB）**、Full **206,942,031 B（197.4 MB）** |
+| 安装器 stub | 369,664 B；v0.5 两个 setup.exe：Mini **722,886 B（0.7 MB）**、Full **206,942,031 B（197.4 MB）**（v0.6 已扩为三个，见附录 D.7） |
 | Mini 静默安装 | `%LOCALAPPDATA%\本地朗读工厂\Mini`；HKCU 产品信息 / Uninstall 项 / `.epub` 关联 / 开始菜单 + 桌面快捷方式全部核验 |
 | 卸载闭环 | 两阶段卸载后 `dir / reg_product / reg_uninstall / lnk_start / lnk_desktop` 全为 False；重装后 `version=0.5.0` |
 | Full 静默安装 | `exit=0`（11.5 s）；`BookCtl.App.exe` + `tools\BookCtl.Cli\bookctl.exe` 存在、`portable.marker` 已删、注册表 `CliPath` 已写 |
@@ -640,3 +640,143 @@ packaging/
 > **已知边界**：Mini 自身不加载任意本地模型权重。检测到 Full 时委托 Full CLI 用真 TTS 模型；
 > 未检测到 Full 时用 Windows 自带 SAPI 语音；两者都不可用则生成明确标注的占位音。
 > 「模型已下载但 Full 未安装」时仍不能直接调权重，需补齐推理适配层（见 `docs/roadmap.md` R-14）。
+
+---
+
+# 附录 D · v0.6 变更：阅读器（边看边读 · 后台预生成）
+
+> 2026-11-24 夜，用户提出「再在这个基础上修改一个另一个版本，把它叫做阅读器」：
+> **边看 EPUB 文字，边听当前段落朗读；同时后台把后面的章节语音提前生成好**。
+> 关键观察（用户原话）：「我们看是肯定没有机器朗读的那么快的」——人眼阅读一个段落约 3–15 秒，
+> 机器合成一段约 0.3–1 秒，因此**只要有一个预取窗口，语音永远能跑在阅读进度前面**，
+> 不需要把整本书一次性合成完再听。
+
+## D.1 定位：第三种使用形态，不是第三条代码线
+
+| | 批量模式（Mini / Full 既有） | **阅读器（本附录新增）** |
+|---|---|---|
+| 目标产物 | 整本 `book.wav` / `book.m4b` + manifest | 不追求整本成品，追求**即时跟读** |
+| 合成时机 | 一次性跑完 S1–S6 | 只合成「当前位置往后 N 段」，边读边补 |
+| 用户动作 | 点一次「生成」，等完成 | 自己翻页/跳章，软件跟随朗读 |
+| 输出 | 磁盘上的有声书文件 | 段落级 WAV 缓存（可按书复用）+ 当前朗读位置 |
+| 文字 | 不显示正文 | **显示 EPUB 正文，当前朗读段落高亮** |
+| 代码 | `audio.rs::generate_book` | `reader.rs`（复用 `audio::parse_epub` / 同一套 SAPI 合成） |
+
+**决策：不新建第三条产品线**。阅读器是 `mini/` 单 exe 的一个模式（`reader` 子命令 /
+`--reader` 参数 / 文件名 `BookCtl.Reader.exe` 自动判定），共用同一份 `Book` 解析、
+同一套配置、同一套 CLI/MCP envelope、同一个安装器 stub。这样「再做一个版本」的代价只是
+**一个新模块 + 一个安装包**，不会出现第三份重复代码（对应 ADR-027）。
+
+## D.2 核心机制
+
+```
+                用户阅读速度  <<  机器合成速度
+   文字区 ──▶ 段落游标 cursor ──▶ 播放线程（PlaySoundW 同步，播完 cursor++）
+                    │                        ▲
+                    │                        │ 只读 WAV
+                    ▼                        │
+   预取窗口 [cursor, cursor+prefetch)  ──▶ 生成线程（SAPI / 委托 Full）
+                    │                        │
+                    ▼                        ▼
+        磁盘缓存 cache/<book-hash>/c###_p####.wav   （跨会话复用）
+```
+
+- **段落游标**：全书段落扁平化为 `segs: Vec<Seg>`，`cursor` 是全局索引；
+  `(ci, pi)` 双向映射。用户点章节 / 点段落 / 上一段 / 下一段 = 改 `cursor`。
+- **预取窗口**：默认 `prefetch = 6` 段，且**跨章节**（当前章快读完时，下一章前几段已进入队列），
+  这正是用户说的「同时在生成后面的章节」。窗口内未生成且未失败的段由生成线程依次补齐。
+- **代际取消**：每次跳读让 `gen += 1`；生成线程在取任务时记下 `gen`，完成后若代际已变，
+  结果仍写入缓存（可复用）但不改变当前窗口状态，避免旧位置抢占进度。
+- **缓存**：key = **规范化绝对路径**（`fs::canonicalize`）+ 文件大小 + 语速（FNV-1a 64），目录
+  `%LOCALAPPDATA%\本地朗读工厂\ReaderCache\<hash>\`。启动时扫描已存在的 WAV 直接标 `ready`；
+  改语速换 key，旧缓存不混用。「重新合成当前段」删除该 WAV 后重排队列。
+  - 路径必须规范化：同一本书用 `testdata/书.epub` / `testdata\书.epub` / 快捷方式传绝对路径，
+    都要命中同一份缓存，否则会重复合成。
+  - **缓存目录不能放在 `…\Reader`**：那是阅读器版的安装目录，卸载会整目录删除，放里面等于删用户数据。
+  - `ReaderCache\last.txt` 记住上次打开的书（存绝对路径，因为快捷方式启动时 cwd 是安装目录），
+    双击阅读器直接续上次的书。
+- **播放**：动态加载 `winmm.dll::PlaySoundW`（不新增链接库依赖），`SND_SYNC | SND_FILENAME`
+  在独立线程同步播放一段；播完自动推进 `cursor`。暂停用 `SND_PURGE` 立即停止当前段。
+- **高亮同步**：文字区为只读多行 EDIT，每段一行带状态前缀（`▶` 正在读 / `·` 已备好 / 空格 未生成）；
+  `EM_SETSEL` 选中当前段实现高亮，`EM_SCROLLCARET` 自动滚动（「自动跟随」可关，关掉后用户自由翻页）。
+- **引擎**：与 Mini 一致——检测到 Full 时委托真 TTS 模型，否则系统 SAPI；两者都不可用则明确标注占位音。
+  阅读器**不阻塞等待整本合成**，只按需合成窗口内段落。
+
+## D.3 目录映射（实际落地，非设计草图）
+
+```
+mini/src/
+├── main.rs        # 入口分发：无参数按 exe 文件名判定 Mini GUI / 阅读器 GUI；新增 reader 子命令
+├── reader.rs      # ★ 新增：状态机 + 三栏 Win32 窗口 + 预生成线程 + 播放线程
+├── audio.rs       # 复用 parse_epub；新增 pub synth_paragraph() 供阅读器单段合成
+├── win32.rs       # 新增 LoadLibraryW/GetProcAddress + play_wav_sync()/stop_wav()
+├── model.rs       # 复用 Config / Reporter
+├── ui.rs          # 不变（批量模式 GUI）
+└── util.rs        # 复用 JSON envelope
+mini/setup/main.rs # meta_from_self() 增加 Edition=Reader；write_registry 支持启动参数
+packaging/make-installer.ps1  # 产出第三个 setup.exe（把 exe 改名 BookCtl.Reader.exe 进 zip）
+```
+
+## D.4 CLI / MCP 契约（延续「对大模型友好」）
+
+所有输出仍是 `{"ok":true,"api_version":"1.0","data":…}` / 错误信封。
+
+| 命令 | 作用 |
+|---|---|
+| `reader --input <epub>` | 打开阅读器 GUI（无 `--input` 时可在窗口里打开 / 拖入 .epub） |
+| `reader --input <epub> --dry-run` | 只解析不合成：返回书名、章节/段落结构、预取窗口计划、缓存目录 |
+| `reader --input <epub> --headless --count N` | **无窗口**实测链路：预生成前 N 段并返回每段状态/字节数/耗时（沙箱验收用） |
+| `reader status --input <epub>` | 返回缓存命中数、已生成段数、总段数、当前引擎 |
+| `reader prefetch --input <epub> --from N --count N` | 供自动化/MCP 主动补窗口，不弹界面 |
+| `mcp` | 新增 tools：`reader_open` / `reader_prefetch` / `reader_status` |
+
+`capabilities` 增加 `reader` 命令、`modes: ["batch","reader"]` 与三个 MCP tool 名。
+
+## D.5 第三个 release
+
+| 安装包 | 内容 | 安装目录 | 注册表 Edition |
+|---|---|---|---|
+| `本地朗读工厂-Mini-0.6.0-setup.exe` | 批量模式（默认） | `…\Mini` | `Mini` |
+| **`本地朗读工厂-阅读器-0.6.0-setup.exe`** | 同一份代码，主 exe 改名 `BookCtl.Reader.exe` | `…\Reader` | `Reader` |
+| `本地朗读工厂-Full-0.3.0-setup.exe` | 重量级 .NET 主线（不变） | `…\Full` | `Full` |
+
+阅读器版安装到独立目录、独立 HKCU 键、独立卸载项/快捷方式/`.epub` 关联；
+程序按自身文件名含 `Reader` 自动进入阅读器模式，**快捷方式不需要额外参数**。
+三个版本可同时安装互不覆盖；卸载只删自己的程序目录，用户模型与有声书缓存保留。
+
+## D.6 关键决策（ADR-027 ~ 030）
+
+- **ADR-027**：阅读器作为 `mini/` 的一个模式而非独立产品线，最大化复用、避免第三套代码。
+- **ADR-028**：同步粒度定为**段落**而非整章或字级。整章合成会让用户等第一句很久；
+  字级需要 SAPI `SpeakProgress` 时间戳 + `waveOut` 精确定位，复杂度高且破坏零依赖。
+  段落级既贴合「我们边读文字」的视觉节奏，也让预取窗口天然成立。
+- **ADR-029**：预取窗口默认 6 段且跨章，磁盘缓存按书+语速持久化；不一次性合成整本。
+- **ADR-030**：播放用动态加载 `winmm.dll`，不新增 `#[link]` 依赖，保证 `rust-lld` 自包含链接不变。
+
+## D.7 落地验收（2026-11-24 夜，实测）
+
+| 验收项 | 实测结果 |
+|---|---|
+| `reader --dry-run` | 《测试之书》3 章 / 14 段 / 362 字；`prefetch=6` → `window_end=7`（**已伸进第 2 章**）；缓存目录与命中数正确 |
+| `reader --headless --count 5` | 5 段真实 SAPI WAV，每段 **572–637 ms**，共 1,642,704 B，状态 `ready`，无界面弹出 |
+| 缓存复用 | 第二次 `--headless` → `cache_hits=5/5`、`elapsed_ms` 全 0 |
+| 缓存键规范化 | 相对路径与绝对路径两次调用 → **同一 `cache_dir`**，第二次 `cache_hits=3` |
+| 跨章预取 | `prefetch --from 3 --count 5` → 段 6/7/8 属第 2 章，前 2 段命中缓存 |
+| 播放链路 | `--play-test` → `status=played`、`play_ms=8601`、`playback_available=true`（`winmm.dll` 动态加载成功） |
+| CLI/MCP | `capabilities` 18 命令 + `modes=[batch,reader]`；MCP `tools/list` 共 **9 个工具**；`reader_open/prefetch/status` 均正常 |
+| GUI（源码版） | 三栏布局、正文首段蓝色高亮、右侧段落导航带状态标记；状态栏「当前第 1/14 段 · 全书已备 9 段 · 预取 6 段」 |
+| 安装版 | `/S` → `…\Reader\BookCtl.Reader.exe`（679,424 B）+ `使用说明.txt` + `Uninstall-Reader.exe`；HKCU 产品项/卸载项/`.epub` 关联/两处快捷方式全部就绪 |
+| 双击启动 | 从安装目录（cwd=安装目录）无参数启动 → 进入阅读器并**自动恢复上次书目**，后台已备 7 段 |
+| 卸载闭环 | `dir / reg_product / reg_uninstall / lnk_start / lnk_desktop / epub_progid` 全 False；**`ReaderCache` 3 个 WAV 全部保留** |
+| 批量模式回归 | `version` / `device list` / `source list` / `run --dry-run` / 旧 MCP tools 全部不退化 |
+
+| 产物 | 体积 |
+|---|---|
+| `BookCtl.Mini.exe`（= `BookCtl.Reader.exe`） | **679,936 B（664 KB）** |
+| `setup-stub.exe` | 370,688 B |
+| `本地朗读工厂-Mini-0.6.0-setup.exe` | 761,141 B |
+| `本地朗读工厂-阅读器-0.6.0-setup.exe` | 720,628 B |
+| `本地朗读工厂-Full-0.3.0-setup.exe` | 206,943,055 B（197.4 MB，未变） |
+
+**界面截图**：`docs/screenshots/10-reader-ui.png`（源码版，正文高亮）、
+`docs/screenshots/11-reader-installed.png`（安装版双击启动，自动恢复书目）。

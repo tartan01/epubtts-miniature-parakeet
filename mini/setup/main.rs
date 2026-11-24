@@ -87,9 +87,15 @@ fn meta_from_self() -> Meta {
     let name = std::env::current_exe().ok()
         .and_then(|p| p.file_name().map(|x| x.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    if name.contains("Mini") {
+    let lower = name.to_ascii_lowercase();
+    // 顺序有意义：阅读器安装包文件名含「阅读器」/Reader，必须最先判定。
+    if name.contains("阅读器") || lower.contains("reader") {
+        Meta { edition: "Reader".into(), app_name: "本地朗读工厂 阅读器".into(),
+               exe_name: "BookCtl.Reader.exe", version: "0.6.0",
+               prog_id: "LocalReadingFactory.Reader" }
+    } else if name.contains("Mini") {
         Meta { edition: "Mini".into(), app_name: "本地朗读工厂 Mini".into(),
-               exe_name: "BookCtl.Mini.exe", version: "0.5.0",
+               exe_name: "BookCtl.Mini.exe", version: "0.6.0",
                prog_id: "LocalReadingFactory.Mini" }
     } else {
         Meta { edition: "Full".into(), app_name: "本地朗读工厂".into(),

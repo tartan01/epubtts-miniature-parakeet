@@ -4,9 +4,11 @@
 > **`packaging/make-installer.ps1` + `mini/build.ps1`（v0.5 Mini）**；说明 `packaging/README.md`。
 > 架构定义：`architecture-epub2audiobook.md §B.6` + **附录 C（Mini）**、README §9 / **§10**。
 
-> **v0.5 起有两条产品线**，两个一键 `setup.exe` 共用同一套自研 Rust 安装器 stub：
-> `本地朗读工厂-Mini-0.5.0-setup.exe`（0.7 MB）与 `本地朗读工厂-Full-0.3.0-setup.exe`（197.4 MB）。
-> 详见本文件 **§8**。Inno Setup（§3）仍保留作为主线备选方案，本机未安装。
+> **v0.6 起有两种源码线、三个一键 `setup.exe`**，共用同一套自研 Rust 安装器 stub：
+> `本地朗读工厂-Mini-0.6.0-setup.exe`（0.7 MB，批量）、
+> `本地朗读工厂-阅读器-0.6.0-setup.exe`（0.7 MB，边看边读）、
+> `本地朗读工厂-Full-0.3.0-setup.exe`（197.4 MB，重量级主线）。
+> 详见 **§8**（Mini/Full）与 **§9**（阅读器）。Inno Setup（§3）仍保留作为主线备选方案，本机未安装。
 
 ## 1. 两个版本的差异
 
@@ -170,8 +172,8 @@ Compress-Archive -Path (Join-Path $out '*') -DestinationPath "$root\dist\本地�
 .\packaging\install-toolchain.cmd     # 首次：装 Rust GNU 工具链（rsproxy.cn 镜像）
 .\mini\build.ps1                      # → dist\release\mini-portable\BookCtl.Mini.exe
                                       #   + dist\release\setup-stub.exe
-.\packaging\make-installer.ps1        # → 两个 setup.exe（Full 复用 dist\*-win-x64.zip）
-.\packaging\make-installer.ps1 -SkipFull   # 只出 Mini
+.\packaging\make-installer.ps1        # → 三个 setup.exe（Full 复用 dist\*-win-x64.zip）
+.\packaging\make-installer.ps1 -SkipFull   # 只出 Mini + 阅读器（省 197MB 重打）
 ```
 
 `mini/.cargo/config.toml` 指定 `rust-lld` + `link-self-contained`，本机无 MSVC / Windows SDK
@@ -181,12 +183,13 @@ Compress-Archive -Path (Join-Path $out '*') -DestinationPath "$root\dist\本地�
 
 | 文件 | 体积 | 说明 |
 |---|---|---|
-| `dist\release\本地朗读工厂-Mini-0.5.0-setup.exe` | **722,886 B** | 拷到另一台电脑测试用这个 |
-| `dist\release\本地朗读工厂-Full-0.3.0-setup.exe` | **206,942,031 B** | 重量级主线（复用既有便携包 zip） |
-| `dist\release\本地朗读工厂-Mini-0.5.0-portable.zip` | ≈345 KB | 免安装便携版 |
-| `dist\release\setup-stub.exe` | 369,664 B | 未附加 payload 的裸 stub |
+| `dist\release\本地朗读工厂-Mini-0.6.0-setup.exe` | **761,141 B** | 批量模式，拷到另一台电脑测试用这个 |
+| `dist\release\本地朗读工厂-阅读器-0.6.0-setup.exe` | **720,628 B** | 阅读器（见 §9） |
+| `dist\release\本地朗读工厂-Full-0.3.0-setup.exe` | **206,943,055 B** | 重量级主线（复用既有便携包 zip） |
+| `dist\release\本地朗读工厂-{Mini,阅读器}-0.6.0-portable.zip` | ≈390 / 350 KB | 免安装便携版 |
+| `dist\release\setup-stub.exe` | 370,688 B | 未附加 payload 的裸 stub |
 
-> `dist/release/` 被 `.gitignore` 排除，**不入库**；跨机测试只拷两个 setup.exe。
+> `dist/release/` 被 `.gitignore` 排除，**不入库**；跨机测试只拷需要的 setup.exe（三个可同时安装）。
 
 ### 8.4 安装行为（HKCU，无需管理员）
 
@@ -231,7 +234,68 @@ Compress-Archive -Path (Join-Path $out '*') -DestinationPath "$root\dist\本地�
 - [ ] `capabilities` / `device list` / `doctor` / `source list` / dry-run 全部 JSON envelope 正常
 - [ ] MCP `initialize` / `tools/list` 正常（6 tools）
 - [ ] 委托 Full 后 `engine` 是动态标签（如 `mock-via-Full`），统计非 0（缺陷 #24）
-- [ ] 两个 setup.exe 都已重新生成（改过 `mini/setup/main.rs` 必须重打）
+- [ ] 三个 setup.exe 都已重新生成（改过 `mini/setup/main.rs` 必须重打）
 - [ ] 安装 / 卸载闭环实测，卸载保留用户数据
 - [ ] 便携包 `使用说明.txt` 含 `chcp 65001` 提示（缺陷 #25）
 - [ ] `git status` 里没有 `.rustup/` / `.cargo/` / `mini/target/` / `dist/release/` / 任何 exe
+
+---
+
+## 9. v0.6 · 第三个包「阅读器」（同一代码、换名发布）
+
+### 9.1 为什么只是改名
+
+阅读器与 Mini 是**同一份 exe**：`mini/src/main.rs` 按 `current_exe()` 文件名是否含 `Reader`
+决定默认进阅读器还是批量 GUI。所以不需要第二套构建，只需在载荷里把 exe 改名。
+
+```powershell
+.\mini\build.ps1                        # 编 BookCtl.Mini.exe（664 KB）
+.\packaging\make-installer.ps1          # 一次出三个 setup.exe
+.\packaging\make-installer.ps1 -SkipFull   # 只出 Mini + 阅读器（省 197 MB 重打）
+```
+
+`make-installer.ps1` 为阅读器做的事：
+1. 建 `dist\release\reader-portable\`；
+2. 复制 `mini-portable\BookCtl.Mini.exe` → `BookCtl.Reader.exe`；
+3. 写阅读器专用的 `使用说明.txt`（按钮说明 + CLI + 缓存位置）；
+4. 打 zip → 追加到 `setup-stub.exe` 尾部 → `本地朗读工厂-阅读器-0.6.0-setup.exe`。
+
+### 9.2 安装器如何区分三个版本
+
+`mini/setup/main.rs::meta_from_self()` 按**自己的文件名**判定，顺序不能颠倒：
+
+| setup 文件名含 | Edition | 安装目录 | 主 exe | prog_id |
+|---|---|---|---|---|
+| `阅读器` / `Reader` | Reader | `…\本地朗读工厂\Reader` | `BookCtl.Reader.exe` | `LocalReadingFactory.Reader` |
+| `Mini` | Mini | `…\本地朗读工厂\Mini` | `BookCtl.Mini.exe` | `LocalReadingFactory.Mini` |
+| 其它 | Full | `…\本地朗读工厂\Full` | `BookCtl.App.exe` | `LocalReadingFactory.Full` |
+
+三者的 HKCU 产品项、卸载项、快捷方式、`.epub` 关联互不冲突，可**同时安装**。
+`.epub` 关联命令都是 `"<exe>" "%1"`，阅读器版双击 epub 直接进阅读器（按文件名判定，不需要额外参数）。
+
+### 9.3 阅读器包的两个额外约束
+
+- **缓存目录必须是 `…\本地朗读工厂\ReaderCache`**，不能是 `…\Reader`：后者是安装目录，
+  卸载会 `remove_dir_all`。验证方法：卸载后 `Get-ChildItem ReaderCache -Filter *.wav` 数量不变。
+- **`last.txt` 必须存绝对路径**：桌面/开始菜单快捷方式启动时 cwd 是安装目录，
+  存相对路径会导致「双击后没恢复上次的书」。
+
+### 9.4 验收记录（2026-11-24 夜）
+
+| 检查 | 结果 |
+|---|---|
+| 阅读器 `/S` 安装 | `exit=0`；`BookCtl.Reader.exe` 679,424 B + `使用说明.txt` + `Uninstall-Reader.exe` |
+| 注册表 | `HKCU\Software\本地朗读工厂\Reader` 的 `InstallPath/Version/Edition/ExePath` 全对；`DisplayName=本地朗读工厂 阅读器` |
+| 快捷方式 | 开始菜单 `本地朗读工厂 阅读器.lnk` + 桌面同名 `.lnk` 均在 |
+| 双击启动 | 从安装目录（cwd=安装目录）无参数启动 → 进阅读器并恢复上次书目，后台已备 7 段 |
+| 卸载 | `dir / reg_product / reg_uninstall / lnk_start / lnk_desktop / epub_progid` 全 False；`ReaderCache` 3 个 WAV 保留 |
+| 三包体积 | Mini 761,141 B / 阅读器 720,628 B / Full 206,943,055 B |
+
+### 9.5 阅读器发布检查清单
+
+- [ ] `reader --dry-run` 的 `prefetch_window` 跨到了下一章（`window_end` > 当前章段数）
+- [ ] `--headless --count 5` 5 段全 `ready`，第二次 `cache_hits=5`
+- [ ] 相对路径与绝对路径两次调用 `cache_dir` 相同（缺陷 #28）
+- [ ] `--play-test` 返回 `playback_available=true`（无声卡环境可只检查该项）
+- [ ] MCP `tools/list` 是 9 个工具，且 `tools/call` 的输出只有一行 JSON（缺陷 #27）
+- [ ] 阅读器 setup.exe 安装 → 卸载 → 缓存保留 → 重装，四步全绿

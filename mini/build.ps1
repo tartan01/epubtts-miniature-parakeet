@@ -86,6 +86,12 @@ $readme = @"
   BookCtl.Mini.exe run --input 书.epub --device auto
   BookCtl.Mini.exe mcp          # MCP stdio 服务
 
+阅读器（边看 EPUB 文字、边听朗读，后台自动预生成后面章节）：
+  BookCtl.Mini.exe reader --input 书.epub
+  BookCtl.Mini.exe reader --input 书.epub --dry-run
+  BookCtl.Mini.exe reader --input 书.epub --headless --count 5
+  BookCtl.Mini.exe reader status --input 书.epub
+
 依赖：仅 Windows 10/11 自带组件（curl.exe / tar.exe / PowerShell System.Speech），
       本目录内的 exe 不需要 .NET、不需要 Python、不需要安装任何运行时。
 

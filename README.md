@@ -42,8 +42,9 @@
 
 > **构建状态（2026-11-24 实测）**：本机已安装 .NET SDK 10.0.404，`dotnet build bookctl.sln` **全解决方案 0 error 0 warning 通过**，
 > WinUI App 已实际启动并渲染窗口；mock 引擎端到端跑通（3 章 EPUB → 分章 `audio.wav` + `audio.m4a` + 整本 `book.m4b`，含中文章节标记）。
-> 实测中发现并已修复 **26 条缺陷/问题**（v0.3 的 12 个运行期缺陷 + v0.4 的 9 条结构/交互/分发问题
-> + v0.5 Mini 的 5 条，含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），详见 §7.1 与 `docs/defects.md`。
+> 实测中发现并已修复 **30 条缺陷/问题**（v0.3 的 12 个运行期缺陷 + v0.4 的 9 条结构/交互/分发问题
+> + v0.5 Mini 的 5 条 + v0.6 阅读器的 4 条，含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），
+> 详见 §7.1 与 `docs/defects.md`。
 
 ## 2. 构建与一键入口
 
@@ -309,30 +310,34 @@ Slim 省在哪：三个命令行工具改 framework-dependent（省掉 3 份 .NE
 
 ## 10. Mini 轻量版与「拷到另一台电脑测试」
 
-v0.5 起仓库有**两条并存的产品线**：
+v0.6 起仓库有**两种源码线、三个安装包**：
 
-| | 重量级主线（Full） | Mini 轻量入口 |
-|---|---|---|
-| 技术 | .NET 10 / WinUI 3 / Python sidecar | Rust / Win32 原生，零外部依赖 |
-| 安装包 | `本地朗读工厂-Full-0.3.0-setup.exe` **197.4 MB** | `本地朗读工厂-Mini-0.5.0-setup.exe` **0.7 MB** |
+| | 重量级主线（Full） | Mini 轻量入口（批量） | 阅读器（边看边读） |
+|---|---|---|---|
+| 技术 | .NET 10 / WinUI 3 / Python sidecar | Rust / Win32 原生，零外部依赖 | 同一份 Rust 代码，`reader` 模式 |
+| 安装包 | `本地朗读工厂-Full-0.3.0-setup.exe` **197.4 MB** | `本地朗读工厂-Mini-0.6.0-setup.exe` **0.7 MB** | `本地朗读工厂-阅读器-0.6.0-setup.exe` **0.7 MB** |
+| 形态 | 整本生成有声书 | 整本生成有声书 | 显示正文 + 段落朗读 + 后台预生成 |
 | 模型 | 内置源管理 + sherpa/piper/GPU 引擎 | 本体零模型；按需下载到任意盘 |
 | 语音 | 真人级音质（sherpa-onnx 等） | 系统 SAPI 兜底；装了 Full 就委托真 TTS 模型 |
 | CLI/MCP | 完整 job 化控制面 | 同一套 JSON envelope / MCP stdio 契约 |
 
-### 10.1 两个安装包在哪
+### 10.1 三个安装包在哪
 
 ```
-dist\release\本地朗读工厂-Mini-0.5.0-setup.exe     ← 拿这个去另一台电脑（0.7 MB）
-dist\release\本地朗读工厂-Full-0.3.0-setup.exe     ← 重量级版本（197.4 MB）
-dist\release\本地朗读工厂-Mini-0.5.0-portable.zip  ← 免安装便携版（解压即用）
+dist\release\本地朗读工厂-Mini-0.6.0-setup.exe       ← 批量模式（0.7 MB）
+dist\release\本地朗读工厂-阅读器-0.6.0-setup.exe     ← 阅读器，边看边读（0.7 MB）
+dist\release\本地朗读工厂-Full-0.3.0-setup.exe       ← 重量级版本（197.4 MB）
+dist\release\本地朗读工厂-Mini-0.6.0-portable.zip    ← 免安装便携版（批量）
+dist\release\本地朗读工厂-阅读器-0.6.0-portable.zip  ← 免安装便携版（阅读器）
 ```
 
-> `dist/release/` 被 `.gitignore` 排除，**不会进仓库**；要从源码重建见 §10.4。
-> 拷到另一台电脑时只拷这两个 `.exe`，不需要整个仓库。
+> `dist/release/` 被 `.gitignore` 排除，**不会进仓库**；要从源码重建见 §10.3。
+> 拷到另一台电脑时只拷需要的 `.exe`，不需要整个仓库。三个版本可**同时安装**互不覆盖。
+> 注意：先装 Full，再装阅读器/Mini，这样阅读器能立即检测到 Full 并用「整本导出」出模型音质。
 
 ### 10.2 另一台电脑验收步骤（干净 Windows 10/11，免管理员）
 
-1. 拷 `本地朗读工厂-Mini-0.5.0-setup.exe` 过去，**双击**（或 `setup.exe /S` 静默）。
+1. 拷 `本地朗读工厂-阅读器-0.6.0-setup.exe` 和/或 `本地朗读工厂-Mini-0.6.0-setup.exe` 过去，**双击**（或 `setup.exe /S` 静默）。
    安装到 `%LOCALAPPDATA%\本地朗读工厂\Mini`，写 HKCU 注册表、开始菜单/桌面快捷方式、`.epub` 关联。
    **不需要 .NET、不需要 Python、不需要 VC++ 运行库、不需要管理员权限**。
 2. 双击桌面「本地朗读工厂 Mini」，把任意 `.epub` 从桌面**直接拖进窗口**。
@@ -354,8 +359,14 @@ BookCtl.Mini.exe source list         # 8 个内置源 + 4 个模型
 BookCtl.Mini.exe source probe sherpa-vits-zh-fanchen   # 自动测速
 BookCtl.Mini.exe source pull sherpa-vits-zh-fanchen --root D:\本地朗读工厂模型
 BookCtl.Mini.exe run --input 书.epub --device auto --pretty
-BookCtl.Mini.exe mcp                # MCP stdio（6 个 tools）
+BookCtl.Mini.exe mcp                # MCP stdio（9 个 tools）
 BookCtl.Mini.exe doctor             # 环境自检
+
+# 阅读器（装的是 BookCtl.Reader.exe 时，双击即进阅读器）
+BookCtl.Reader.exe reader --input 书.epub --dry-run          # 只解析，输出章节/预取计划
+BookCtl.Reader.exe reader --input 书.epub --headless --count 5   # 无窗口实测预生成
+BookCtl.Reader.exe reader status --input 书.epub             # 缓存命中情况
+BookCtl.Reader.exe reader --input 书.epub --play-test        # 验证播放链路
 ```
 
 > **PowerShell 5.1 看中文日志乱码**：`chcp 65001` 或
@@ -367,7 +378,7 @@ BookCtl.Mini.exe doctor             # 环境自检
 ```powershell
 .\packaging\install-toolchain.cmd     # 一键装 Rust GNU 工具链（rsproxy 镜像）
 .\mini\build.ps1                      # 编 BookCtl.Mini.exe + setup-stub.exe
-.\packaging\make-installer.ps1        # 产出两个 setup.exe（Full 复用既有便携包 zip）
+.\packaging\make-installer.ps1        # 产出三个 setup.exe（Full 复用既有便携包 zip）
 ```
 
 本机没有 MSVC / Windows SDK，用 `rust-lld` 自包含链接，产物不依赖 VC++ Redistributable。
@@ -375,8 +386,46 @@ BookCtl.Mini.exe doctor             # 环境自检
 
 ### 10.4 目录与唯一事实源
 
-- `mini/` 六个源码模块：`main / win32 / ui / model / audio / util`，另 `mini/setup/main.rs` 是自解压安装器。
-- 总架构唯一事实源：`architecture-epub2audiobook.md` **附录 C**（v0.5 设计 + C.7 实测验收）。
+- `mini/` 七个源码模块：`main / win32 / ui / model / audio / reader / util`，另 `mini/setup/main.rs` 是自解压安装器。
+- 总架构唯一事实源：`architecture-epub2audiobook.md` **附录 C**（v0.5 Mini）+ **附录 D**（v0.6 阅读器）。
 - 交接细节见 [`HANDOVER.md`](./HANDOVER.md) §3 代码地图、`docs/workflows/06-packaging.md`、
-  `docs/defects.md` #22–#26。
+  `docs/defects.md` #22–#30。
+
+---
+
+## 11. 阅读器：边看 EPUB 文字，边听朗读（v0.6）
+
+### 11.1 它解决什么问题
+
+批量模式是"点一下、等它生成整本、再听"。但很多时候你想**坐下来读**：
+眼睛看得比机器读得快，等整本合成完就失去阅读节奏了。阅读器把这两件事并行起来：
+
+- 中间显示 EPUB 正文，**当前朗读的段落高亮**，朗读推进时自动跟随滚动；
+- 后台只合成"当前位置往后 6 段 + 下一章前 2 段"，人看一段要几秒、机器合成一段只要 0.6 秒，
+  所以**语音永远跑在阅读进度前面**，不会卡；
+- 想看快一点就往下翻，语音立刻从新位置续上；想停下就「暂停」。
+
+### 11.2 界面与操作
+
+左：章节列表；中：正文（当前段蓝色高亮）；右：段落导航（`·` 已备好 / `⋯` 生成中 / `○` 未生成 / `!` 失败）。
+
+| 控件 | 作用 |
+|---|---|
+| 打开电子书… / 拖入 `.epub` | 换书；也会记住上次打开的书，下次双击直接续 |
+| ⏮ 上一段 / ⏭ 下一段 | 逐段跳转，朗读中跳会立即从新位置继续 |
+| ▶ 开始朗读 / ⏸ 暂停朗读 | 播放/暂停当前段落 |
+| 语速 − / + | 0.5×–2.0×，换语速用独立缓存不混用 |
+| 重合成本段 | 删掉该段 WAV 重新合成（生成失败时用） |
+| 跟随：开/关 | 关掉后正文不随朗读滚动，方便自己往后翻着看 |
+| 整本导出… | 走批量流水线，装了 Full 就能用模型音质导出整本 |
+| 预取 2/4/6/10/16 段 | 后台提前生成多少段 |
+
+### 11.3 数据与边界
+
+- 朗读缓存：`%LOCALAPPDATA%\本地朗读工厂\ReaderCache\<hash>\`，按「书 + 语速」分目录，
+  **卸载不删除**；上次打开的书记在同目录 `last.txt`。
+- 同步粒度是**段落**，不做字级逐字高亮（取舍见 `docs/decisions/ADR.md` ADR-028）。
+- 阅读器用**系统语音即时朗读**（SAPI，单段约 0.6 秒）。想要模型音质的整本成品，点「整本导出…」
+  或直接用 Mini/Full 的批量模式。
+- 没有音频设备的环境里 `--play-test` 会返回 `playback_failed`，属正常；GUI 里同样听不到声音但不影响预生成。
 

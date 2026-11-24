@@ -300,7 +300,9 @@ pub trait Reporter: Send + Sync {
 pub struct NullReporter;
 impl Reporter for NullReporter {
     fn progress(&self, _p: &Progress) {}
-    fn log(&self, line: &str) { println!("{}", line); }
+    // 必须彻底静默：MCP stdio 与 CLI 都把 stdout 当作协议通道，
+    // 这里一旦 println! 就会在 JSON-RPC / JSON envelope 前插入非协议文本（缺陷 #27）。
+    fn log(&self, _line: &str) {}
 }
 
 // ============================ 选盘安装 ============================

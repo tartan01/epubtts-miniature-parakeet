@@ -4,7 +4,7 @@
 //! 没装 Full 时用 Windows 自带 SAPI 语音（经系统 PowerShell 的 System.Speech 封装）
 //! 逐段合成 WAV 并拼接成分章节有声书；两者都不可用则生成占位音并明确告知。
 
-use crate::model::{detect_full_cli, Config, Progress, Reporter};
+use crate::model::{detect_full_cli, Config, NullReporter, Progress, Reporter};
 use crate::util::{self, J};
 use crate::win32;
 use std::collections::HashMap;
@@ -430,6 +430,22 @@ fn synth_sapi(text: &str, wav: &Path, cfg: &Config, tmp: &Path,
         *warned = true;
     }
     placeholder_wav(wav)
+}
+
+/// 阅读器专用：只合成**一个段落**到指定 WAV。
+/// 与 `generate_book` 的区别是不做整章拼接、不写 manifest、不启动整本流水线，
+/// 因此单段延迟只有几百毫秒，适合"边看边读"的预取窗口。
+/// 返回 `true` = 系统 SAPI 真语音；`false` = 系统语音不可用、已写占位音。
+pub fn synth_paragraph(text: &str, wav: &Path, cfg: &Config) -> Result<bool, String> {
+    let tmp = win32::temp_dir().join(format!("bctl_read_{}_{}",
+        std::process::id(), win32::tick_ms()));
+    fs::create_dir_all(&tmp).map_err(|e| format!("创建合成临时目录失败：{}", e))?;
+    let ps1 = tmp.join("synth.ps1");
+    fs::write(&ps1, synth_script().as_bytes()).map_err(|e| e.to_string())?;
+    let mut warned = false;
+    let r = synth_sapi(text, wav, cfg, &tmp, &ps1, &NullReporter, &mut warned);
+    let _ = fs::remove_dir_all(&tmp);
+    r.map(|_| !warned)
 }
 
 // ---------------- 委托重量级主线 ----------------

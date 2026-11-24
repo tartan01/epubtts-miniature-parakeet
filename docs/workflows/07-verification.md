@@ -168,12 +168,50 @@ engine=mock-via-Full / wav_bytes≈681002`；`manifest.json` 含 3 条真实章�
 改了 `mini/setup/main.rs` 后还要跑安装/卸载闭环：
 
 ```powershell
-dist\release\本地朗读工厂-Mini-0.5.0-setup.exe /S
+dist\release\本地朗读工厂-Mini-0.6.0-setup.exe /S
 & "$env:LOCALAPPDATA\本地朗读工厂\Mini\Uninstall-Mini.exe" /UNINSTALL /S
 # 目录 / reg_product / reg_uninstall / lnk_start / lnk_desktop 全 False
 ```
 
 > PowerShell 5.1 看中文日志乱码时先 `chcp 65001`（缺陷 #25，宿主解码问题，非程序缺陷）。
+
+## 9.5 阅读器回归（v0.6，改了 `mini/src/reader.rs` 必跑）
+
+```powershell
+$R="dist\release\mini-portable\BookCtl.Mini.exe"
+& $R reader --input testdata\测试之书.epub --dry-run --pretty
+& $R reader --input testdata\测试之书.epub --headless --count 5
+& $R reader --input testdata\测试之书.epub --headless --count 5   # 再来一次看命中
+& $R reader status --input testdata\测试之书.epub
+& $R reader prefetch --input testdata\测试之书.epub --from 3 --count 5
+& $R reader --input testdata\测试之书.epub --play-test
+```
+
+期望：
+
+| 命令 | 关键断言 |
+|---|---|
+| `--dry-run` | `chapters=3 / paragraphs=14`；`prefetch_window` 里出现**下一章**的段（跨章预取） |
+| `--headless --count 5` | 5 段 `state=ready`、`elapsed_ms` 各 500–800、`wav_bytes>100` |
+| 第二次 `--headless` | `cache_hits=5`、`elapsed_ms` 全 0（不重复合成） |
+| `status` | `ready`/`total` 与缓存目录一致 |
+| `prefetch --from 3` | 返回段 6/7/8 属第 2 章 |
+| `--play-test` | `playback_available=true`；有音频设备时 `status=played`、`play_ms>1000` |
+
+GUI 验收（人工 30 秒）：双击阅读器 → 三栏中文正常 → 正文首段蓝色高亮 →
+等 3 秒状态栏出现「全书已备 N 段」→ 点「开始朗读」→ 高亮随朗读前移且正文自动滚动 →
+点「跟随：关」后正文不再滚动 → 点右侧段落可跳转 → 拖入另一本 `.epub` 能换书。
+
+安装/卸载闭环：
+
+```powershell
+dist\release\本地朗读工厂-阅读器-0.6.0-setup.exe /S
+& "$env:LOCALAPPDATA\本地朗读工厂\Reader\Uninstall-Reader.exe" /UNINSTALL /S
+# 卸载后：目录/注册表/快捷方式/ProgId 全 False，且 ReaderCache 里 WAV 数量不变
+```
+
+> MCP 侧要看 `tools/list` 是 **9 个**工具；`tools/call` 的 stdout 必须**只有一行 JSON**
+> （`NullReporter` 曾往 stdout 打印解析日志，缺陷 #27）。
 
 ## 10. 未覆盖的验证（留给接手者）
 

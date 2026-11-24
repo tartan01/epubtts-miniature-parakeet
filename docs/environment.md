@@ -43,16 +43,19 @@
 | 便携版目录 | `dist\本地朗读工厂-0.3.0-win-x64\` |
 | 便携版 zip | `dist\本地朗读工厂-0.3.0-win-x64.zip`（≈196 MB） |
 | 便携版 CLI | `dist\本地朗读工厂-0.3.0-win-x64\tools\BookCtl.Cli\bookctl.exe` |
-| **Mini 主程序** | `dist\release\mini-portable\BookCtl.Mini.exe`（616,960 B） |
-| **安装器 stub** | `dist\release\setup-stub.exe`（369,664 B） |
-| **Mini 一键安装包** | `dist\release\本地朗读工厂-Mini-0.5.0-setup.exe`（722,886 B） |
-| **Full 一键安装包** | `dist\release\本地朗读工厂-Full-0.3.0-setup.exe`（206,942,031 B） |
-| Mini 便携 zip | `dist\release\本地朗读工厂-Mini-0.5.0-portable.zip`（≈345 KB） |
+| **Mini 主程序** | `dist\release\mini-portable\BookCtl.Mini.exe`（679,936 B） |
+| **阅读器主程序** | `dist\release\reader-portable\BookCtl.Reader.exe`（679,936 B，同一份 exe 改名） |
+| **安装器 stub** | `dist\release\setup-stub.exe`（370,688 B） |
+| **Mini 一键安装包** | `dist\release\本地朗读工厂-Mini-0.6.0-setup.exe`（761,141 B） |
+| **阅读器一键安装包** | `dist\release\本地朗读工厂-阅读器-0.6.0-setup.exe`（720,628 B） |
+| **Full 一键安装包** | `dist\release\本地朗读工厂-Full-0.3.0-setup.exe`（206,943,055 B） |
+| Mini / 阅读器便携 zip | `dist\release\本地朗读工厂-{Mini,阅读器}-0.6.0-portable.zip`（≈390 / 350 KB） |
+| 阅读器朗读缓存 | `%LOCALAPPDATA%\本地朗读工厂\ReaderCache\<hash>\`（不入库，卸载也保留） |
 
 > 生成这些产物需要本机编译；**仓库里不含 bin/ 内容**，`dist/` 与 `dist/release/` 也被 `.gitignore` 排除。
 > clone 后按 `docs/workflows/01-build-and-run.md` 重建 .NET 主线，
 > 按 `packaging/install-toolchain.cmd` → `mini/build.ps1` → `packaging/make-installer.ps1` 重建 Mini。
-> 跨机测试只需拷两个 `*-setup.exe`。
+> 跨机测试只需拷需要的 `*-setup.exe`（三个包可同时安装，互不覆盖）。
 
 ## 3.1 安装后的用户目录（v0.5）
 
@@ -119,10 +122,12 @@
 | 各轮工作区产物（M4B / WAV / DB / 日志） | `testdata\ws-*` | ❌ |
 | 单句真语音试听 | `testdata\sherpa-probe.wav` | ❌ |
 | 便携版 zip / 目录 | `dist\` | ❌ |
-| Mini 两个 setup.exe / 便携 zip / stub | `dist\release\` | ❌（跨机测试手工拷贝） |
+| Mini / 阅读器 / Full 三个 setup.exe、便携 zip、stub | `dist\release\` | ❌（跨机测试手工拷贝） |
 | Rust 工具链 | `.rustup\` / `.cargo\` | ❌（例外：`mini\.cargo\config.toml` ✅） |
 | Rust 构建中间产物 | `mini\target\` / `mini\_probe\*.exe` / `mini\*.exe` | ❌ |
 | Mini 界面截图（07/08/09） | `docs\screenshots\07~09-*.png` | ✅ |
+| 阅读器界面截图（10/11） | `docs\screenshots\10~11-*.png` | ✅ |
+| 阅读器缓存 / last.txt | `%LOCALAPPDATA%\本地朗读工厂\ReaderCache\` | ❌（用户数据，不在仓库内） |
 | Python venv | `engine\.venv\` | ❌ |
 | 原始会话 jsonl | `C:\Users\romanovsky\.workbuddy\projects\...\08257854-....jsonl` | ❌（含宿主运行时上下文） |
 

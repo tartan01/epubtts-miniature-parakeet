@@ -1,7 +1,8 @@
 //! 本地朗读工厂 · Mini（Rust / Win32 原生 / 零外部依赖）
 //!
-//! 单 exe 三种入口：
-//!   * 无参数 / .epub 路径 / --detailed / --auto-start  → GUI 轻量入口
+//! 单 exe 四种入口：
+//!   * 无参数 / .epub 路径 / --detailed / --auto-start  → GUI 轻量入口（批量模式）
+//!   * reader / --reader / 文件名含 Reader           → 阅读器（边看边读 + 后台预生成）
 //!   * capabilities / device / source / config / run / doctor  → CLI（JSON envelope）
 //!   * mcp  → MCP stdio JSON-RPC（tools/list、tools/call）
 //!
@@ -9,6 +10,7 @@
 
 mod audio;
 mod model;
+mod reader;
 mod ui;
 mod util;
 mod win32;
@@ -17,7 +19,7 @@ use model::{Config, NullReporter, Progress, Reporter};
 use std::io::{self, BufRead, Write};
 use util::J;
 
-const VERSION: &str = "0.5.0";
+const VERSION: &str = "0.6.0";
 
 struct CliReporter { quiet: bool }
 impl Reporter for CliReporter {
@@ -70,14 +72,27 @@ fn capabilities_data() -> J {
             util::s("source remove <id>"), util::s("config show"),
             util::s("config import <file>"), util::s("config set <k> <v>"),
             util::s("run --input <epub>"), util::s("doctor"), util::s("mcp"), util::s("gui"),
+            util::s("reader --input <epub>"), util::s("reader --input <epub> --dry-run"),
+            util::s("reader --input <epub> --headless --count N"),
+            util::s("reader status --input <epub>"),
+            util::s("reader prefetch --input <epub> --from N --count N"),
+        ])),
+        ("modes", util::arr(vec![util::s("batch"), util::s("reader")])),
+        ("reader", util::obj(vec![
+            ("version", util::s(reader::VERSION)),
+            ("default_prefetch", util::i(reader::DEFAULT_PREFETCH as i64)),
+            ("sync", util::s("paragraph")),
+            ("note", util::s("显示 EPUB 正文 + 当前段落朗读 + 后台跨章节预生成，缓存按书与语速复用")),
         ])),
         ("devices", util::arr(vec![util::s("auto"), util::s("cpu"), util::s("gpu"), util::s("hybrid")])),
         ("sources", util::arr(srcs)),
         ("models", util::arr(models)),
         ("mcp", util::obj(vec![
             ("protocol_version", util::s("2025-06-18")),
-            ("tools", util::arr(vec![util::s("source_list"), util::s("source_pull"),
-                util::s("config_show"), util::s("job_start"), util::s("book_inspect")])),
+            ("tools", util::arr(vec![util::s("source_list"), util::s("source_probe"),
+                util::s("source_pull"), util::s("config_show"), util::s("job_start"),
+                util::s("book_inspect"), util::s("reader_open"),
+                util::s("reader_prefetch"), util::s("reader_status")])),
         ])),
         ("envelope", util::s("{\"ok\":bool,\"api_version\":\"1.0\",\"data\":...|\"error\":...}")),
     ])
@@ -128,6 +143,8 @@ fn doctor_data(cfg: &Config) -> J {
         ("config_dir", win32::exists(&Config::dir())),
         ("model_root", !cfg.model_root.is_empty() && win32::exists(&cfg.model_root)),
         ("full_cli", model::detect_full_cli(cfg).is_some()),
+        ("reader_wav_playback", win32::wav_playback_available()),
+        ("reader_cache_dir", win32::exists(&format!("{}\\ReaderCache", Config::dir()))),
     ];
     util::obj(vec![
         ("ok", util::b(checks.iter().all(|(_, v)| *v))),
@@ -228,6 +245,13 @@ fn cli(args: &[String]) -> i32 {
             println!("  BookCtl.Mini.exe mcp                MCP stdio 服务");
             println!("  BookCtl.Mini.exe doctor             环境自检");
             println!("");
+            println!("阅读器（边看 EPUB 文字，边听朗读，后台预生成后面章节）：");
+            println!("  BookCtl.Reader.exe                  安装版默认进阅读器");
+            println!("  BookCtl.Mini.exe reader --input 书.epub");
+            println!("  BookCtl.Mini.exe reader --input 书.epub --dry-run   # 只解析，输出预取计划 JSON");
+            println!("  BookCtl.Mini.exe reader --input 书.epub --headless --count 5  # 无窗口实测预生成");
+            println!("  BookCtl.Mini.exe reader status --input 书.epub");
+            println!("");
             println!("提示：PowerShell 5.1 会把子进程 stderr 按 GBK 解码，中文日志显示为乱码。");
             println!("      这是宿主编解码问题，不是程序输出错误；先执行下面任一行即可正常显示：");
             println!("        chcp 65001");
@@ -314,15 +338,30 @@ fn cli(args: &[String]) -> i32 {
         "run" => run_command(args, &cfg, pretty, quiet),
         "doctor" => { out(&util::ok(doctor_data(&cfg), ), pretty); 0 }
         "mcp" => { mcp_loop(&cfg); 0 }
-        "gui" | "--gui" => { ui::run_gui(None, false, false); 0 }
+        "reader" | "--reader" => reader::handle_cli(args, &cfg, pretty),
+        "gui" | "--gui" => {
+            if reader::is_reader_exe() { reader::run_reader_gui(None, cfg.clone(), reader::DEFAULT_PREFETCH); }
+            else { ui::run_gui(None, false, false); }
+            0
+        }
         // 兼容 .NET 主线的命令行参数：拖入 .epub / --detailed / --auto-start
         x if x.ends_with(".epub") => {
             let auto = has(args, "--auto-start");
-            ui::run_gui(Some(x), auto, has(args, "--detailed")); 0
+            if reader::is_reader_exe() {
+                reader::run_reader_gui(Some(x), cfg.clone(), reader::DEFAULT_PREFETCH);
+            } else {
+                ui::run_gui(Some(x), auto, has(args, "--detailed"));
+            }
+            0
         }
         "--detailed" | "--auto-start" | "--on-top" => {
             let epub = args.iter().find(|a| a.ends_with(".epub")).cloned();
-            ui::run_gui(epub.as_deref(), has(args, "--auto-start"), has(args, "--detailed")); 0
+            if reader::is_reader_exe() {
+                reader::run_reader_gui(epub.as_deref(), cfg.clone(), reader::DEFAULT_PREFETCH);
+            } else {
+                ui::run_gui(epub.as_deref(), has(args, "--auto-start"), has(args, "--detailed"));
+            }
+            0
         }
         x => { out(&util::err("ARGS_INVALID", &format!("未知命令：{}", x), "运行 BookCtl.Mini.exe help"), pretty); 2 }
     }
@@ -350,6 +389,9 @@ fn mcp_tool_defs() -> Vec<J> {
         def("job_start", "生成整本有声书", vec![
             ("input", "string", "EPUB 路径"), ("device", "string", "auto|cpu|gpu|hybrid")]),
     ]
+    .into_iter()
+    .chain(reader::mcp_tools().into_iter())
+    .collect()
 }
 
 fn mcp_call(cfg: &Config, name: &str, a: &J) -> J {
@@ -397,6 +439,7 @@ fn mcp_call(cfg: &Config, name: &str, a: &J) -> J {
                 Err(e) => util::obj(vec![("status", util::s("failed")), ("error", util::s(&e))]),
             }
         }
+        x if x.starts_with("reader_") => reader::mcp_call(cfg, x, a),
         _ => util::obj(vec![("error", util::s(&format!("未知工具：{}", name)))]),
     }
 }
@@ -447,6 +490,13 @@ fn mcp_loop(cfg: &Config) {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // 安装成「阅读器」版时主 exe 改名为 BookCtl.Reader.exe，双击即进阅读器，
+    // 快捷方式与 .epub 关联都不需要额外参数。
+    if args.is_empty() && reader::is_reader_exe() {
+        let cfg = Config::load();
+        reader::run_reader_gui(None, cfg, reader::DEFAULT_PREFETCH);
+        std::process::exit(0);
+    }
     let code = cli(&args);
     std::process::exit(code);
 }

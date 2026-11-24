@@ -55,7 +55,7 @@ BOOKCTL_WORKSPACE="$ROOT/testdata/ws-regression" \
 
 ```powershell
 .\mini\build.ps1                      # 编 BookCtl.Mini.exe + setup-stub.exe
-.\packaging\make-installer.ps1        # 重打两个 setup.exe
+.\packaging\make-installer.ps1        # 重打三个 setup.exe（Mini / 阅读器 / Full；-SkipFull 跳过 197MB）
 dist\release\mini-portable\BookCtl.Mini.exe capabilities
 dist\release\mini-portable\BookCtl.Mini.exe run --input testdata\测试之书.epub --dry-run
 dist\release\mini-portable\BookCtl.Mini.exe run --input testdata\测试之书.epub --engine mock -o $env:TEMP\mini-reg
@@ -77,7 +77,7 @@ PS 5.1 会把 rustc 的 stderr warning 当终止错误，且函数 stdout 会污
 - ❌ 不要把设备选择结果（`DevicePlan`）放进 `profile_hash`——换显卡不应影响产物确定性判定。
 - ❌ 不要删除 `.workbuddy/` 目录（WorkBuddy 项目数据，非缓存）。
 - ❌ 不要把 `Console.OutputEncoding` 的设置挪回 `Emit()` 里——事件流 JSONL 会先输出，导致中文乱码。UTF-8 必须在 `Main()` 开头统一。
-- ❌ **不要把 `.rustup/`、`.cargo/`、`mini/target/`、`mini/*.exe`、`dist/release/`、两个 setup.exe 提交入库**
+- ❌ **不要把 `.rustup/`、`.cargo/`、`mini/target/`、`mini/*.exe`、`dist/release/`、三个 setup.exe 提交入库**
   （`.gitignore` 已排除）；例外只有 `mini/.cargo/config.toml`。
 - ❌ 不要在 `mini/` 里引入任何外部 crate（`serde` / `windows` / `windows-sys` 等）——mini 的价值就是零依赖、离线可构建。
 - ❌ 不要改 `mini/build.ps1` 的 UTF-8 BOM；也不要把 `rustc` 换回 MSVC 工具链（本机没装）。
@@ -85,6 +85,12 @@ PS 5.1 会把 rustc 的 stderr warning 当终止错误，且函数 stdout 会污
   改编码会破坏 CLI/MCP 的 JSON envelope 契约。正确做法是 `chcp 65001`。
 - ❌ 不要在 `mini/setup/main.rs` 的 `Uninstall-*.exe` 路径里要求 payload：卸载器是 stub 头部（无 overlay），
   必须支持**无参数双击卸载**。
+- ❌ **不要把阅读器缓存目录改回 `…\Reader`**：那是阅读器版的安装目录，卸载会整目录删除（缺陷 #29）。
+  缓存必须在 `…\ReaderCache\`。
+- ❌ 不要在 `NullReporter::log()` 里 `println!`：MCP stdio 与 CLI 的 stdout 是协议通道，
+  任何非协议文本都会破坏 JSON-RPC / envelope（缺陷 #27）。
+- ❌ 不要把 `reader` 改成整本合成后再开播，或为“逐字高亮”去订阅 SAPI `SpeakProgress`（ADR-028/029）。
+- ❌ 不要为了播放给 `winmm` 加 `#[link]`：用已写好的 `win32::play_wav_sync()`（动态加载，ADR-030）。
 
 ## 5. 必须遵守的代码模式
 
@@ -103,6 +109,10 @@ PS 5.1 会把 rustc 的 stderr warning 当终止错误，且函数 stdout 会污
 | Mini MCP 新 tool | 同步 `mcp_tool_defs()` + `mcp_call()` + `capabilities_data().mcp.tools` |
 | Mini 新下载源 | 加进 `model.rs::sources()` + `effective_urls()` 的模板映射，保持 `probe_sources()` 自动测速可用 |
 | 安装器改动 | 改 `mini/setup/main.rs` 后必须重跑 `mini\build.ps1` + `packaging\make-installer.ps1`，并实测安装/卸载闭环 |
+| 阅读器新命令 | 同步 `reader.rs::handle_cli()` + `main.rs::cli()` 的 `reader` 分支 + `help` + `capabilities_data().commands` + README §11 |
+| 阅读器状态变更 | 只改 `ReaderState` 字段 + 置 `ui_dirty = true`；**绝不在持锁时调 `play_wav_sync` 或弹 MessageBox**（与 `ui.rs` 的 WM_TIMER 快照同一约定） |
+| 预取策略改动 | 改 `ReaderState::window_end()`；必须保持“至少伸进下一章前 2 段”，否则跨章会等生成 |
+| 新增安装形态 | `meta_from_self()` 按文件名判定 Edition，优先级 Reader → Mini → Full；`make-installer.ps1` 同步加一个载荷块 |
 
 ## 6. 架构变更流程
 
