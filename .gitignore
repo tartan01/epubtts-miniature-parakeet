@@ -1,0 +1,84 @@
+# ============================================================
+# 本地朗读工厂（bookctl）· 仓库忽略规则
+# 原则：只提交源码 / 脚本 / 配置 / 文档 / 极小测试资产。
+#       编译产物、模型权重、音频、数据库、密钥一律不入库。
+# ============================================================
+
+# ---- .NET 构建产物 ----
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+
+# ---- Python sidecar ----
+engine/.venv/
+**/__pycache__/
+*.py[cod]
+
+# ---- 发布 / 封装产物 ----
+dist/
+*.zip
+*.7z
+*.msi
+*.exe.setup
+portable.marker
+edition.json
+packaging-build.log
+
+# ---- 运行时数据 ----
+**/bookctl.db
+**/bookctl.db-wal
+**/bookctl.db-shm
+worker.lock
+*.log
+
+# ---- 音频与媒体产物（大文件）----
+*.wav
+*.m4a
+*.m4b
+*.mp3
+*.flac
+*.aac
+*.ogg
+*.ffmetadata
+
+# 例外：docs 下的界面截图需要保留（上面没有忽略 png）
+# testdata 下的原始截图 / 验收输出忽略
+/testdata/*.png
+/testdata/*.json
+/testdata/ws-*/
+/testdata/*/book.m4b
+
+# ---- 模型源（约 132 MB，含许可/分发考虑）----
+sources/
+.installed.json
+*.onnx
+*.tar.bz2
+*.tar.gz
+
+# ---- 密钥 / 凭据 / 本地环境 ----
+*.pfx
+*.p12
+*.key
+*.pem
+.env
+.env.*
+secrets.*
+BOOKCTL_*
+
+# ---- WorkBuddy 项目内部数据（非缓存，不删也不提交）----
+.workbuddy/
+
+# ---- 临时文件 ----
+*.tmp
+*.bak
+*.swp
+~$*
+Thumbs.db
+Desktop.ini
+
+# ---- 显式保留 ----
+!docs/screenshots/*.png
+!testdata/测试之书.epub

@@ -1,0 +1,27 @@
+# bookctl TTS sidecar 依赖说明
+
+## 校样模式（mock）——零依赖
+
+`python tts_server.py --mode mock --port 8765` 只使用 Python 标准库（3.9+），
+用于在无显卡机器上跑通「EPUB → 分章音频 → manifest」全链路和 UI 验收。
+
+## 真实引擎（cosyvoice3）——P1 接入时按官方仓库安装
+
+以 CosyVoice 官方仓库（https://github.com/FunAudioLLM/CosyVoice）的 requirements 为准，
+Windows 关键项（截至 2026-11 调研结论）：
+
+```
+# Python 3.10（锁版本）
+# CUDA >= 12.8（Blackwell 50 系必须），cuDNN 匹配
+torch        # CUDA 构建，按显卡选 wheel
+torchaudio
+triton-windows==3.4.*   # 锁版本；设 TORCH_COMPILE_DISABLE=1 更稳
+transformers>=4.40
+hyperpyyaml
+conformer
+# 权重：Fun-CosyVoice3-0.5B-2512_RL（Apache-2.0）
+# 可选回验：faster-whisper
+```
+
+注意：`openai-whisper` 需在 torch 之后单独安装，否则会重拉 PyTorch；
+sox / ffmpeg 依 CosyVoice 版本要求补齐。详见总架构文档 §7「Windows 必写进手册的坑」。

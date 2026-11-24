@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bookctl · Windows 本地 EPUB → 分章节有声书框架 架构评审稿</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --surface:#ffffff; --line:#e3e7ed; --ink:#1a2230; --muted:#5b6675;
+    --accent:#2f6feb; --accent-soft:#eaf1ff; --green:#0f8a5f; --green-soft:#e8f7f0;
+    --amber:#b8730a; --amber-soft:#fff4e2; --red:#c0392b; --red-soft:#fdeceb;
+    --purple:#6a49c8; --purple-soft:#f0ecff; --mono:'Cascadia Code','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:38px 30px 90px}
+  header{border-bottom:3px solid var(--accent);padding-bottom:22px;margin-bottom:30px}
+  .eyebrow{font-size:12px;letter-spacing:.16em;color:var(--accent);font-weight:700;text-transform:uppercase}
+  h1{font-size:30px;line-height:1.35;margin:10px 0 8px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .tag{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 11px;font-size:12px;color:var(--muted)}
+  .tag b{color:var(--ink);font-weight:600}
+  h2{font-size:20px;margin:44px 0 16px;padding-left:12px;border-left:4px solid var(--accent);line-height:1.3}
+  h3{font-size:15px;margin:24px 0 10px;color:var(--ink)}
+  p{margin:10px 0}
+  .lead{font-size:15px;color:var(--muted)}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 16px 14px}
+  .card .k{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .card .v{font-size:20px;font-weight:700;margin:6px 0 3px;line-height:1.25}
+  .card .d{font-size:12px;color:var(--muted);line-height:1.55}
+  .box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;margin:16px 0}
+  .note{background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:16px 0;font-size:13px}
+  .warn{background:var(--amber-soft);border-left:4px solid var(--amber);border-radius:0 8px 8px 0;padding:12px 16px;margin:16px 0;font-size:13px}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px;margin:14px 0}
+  th{background:#f0f3f8;text-align:left;padding:10px 12px;font-weight:650;color:var(--muted);font-size:12px;letter-spacing:.03em;border-bottom:1px solid var(--line)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  code,pre{font-family:var(--mono)}
+  code{background:#eef1f6;border-radius:4px;padding:1px 5px;font-size:12px}
+  pre{background:#1d2430;color:#e6edf7;border-radius:8px;padding:16px 18px;overflow-x:auto;font-size:12px;line-height:1.65;margin:12px 0}
+  .pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:650;white-space:nowrap}
+  .p-main{background:var(--green-soft);color:var(--green)}
+  .p-alt{background:var(--accent-soft);color:var(--accent)}
+  .p-no{background:var(--red-soft);color:var(--red)}
+  .p-mid{background:var(--amber-soft);color:var(--amber)}
+  /* architecture */
+  .layer{display:grid;grid-template-columns:150px 1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:8px;background:var(--surface)}
+  .layer .ln{padding:18px 16px;font-weight:700;font-size:13px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:4px}
+  .layer .ln small{font-weight:400;color:var(--muted);font-size:11px;line-height:1.5}
+  .layer .lc{padding:16px 18px}
+  .L1 .ln{background:var(--purple-soft);color:var(--purple)} .L2 .ln{background:var(--accent-soft);color:var(--accent)}
+  .L3 .ln{background:var(--green-soft);color:var(--green)}   .L4 .ln{background:var(--amber-soft);color:var(--amber)}
+  .mods{display:flex;flex-wrap:wrap;gap:8px}
+  .mod{border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-size:12px;background:#fbfcfe;min-width:150px}
+  .mod b{display:block;font-size:13px;margin-bottom:2px}
+  .mod span{color:var(--muted);font-size:11px}
+  .flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:6px 0 10px}
+  .stage{flex:1 0 150px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:12px 13px;position:relative;margin-right:22px}
+  .stage:last-child{margin-right:0}
+  .stage:after{content:'➜';position:absolute;right:-19px;top:50%;transform:translateY(-50%);color:var(--accent);font-size:16px}
+  .stage:last-child:after{content:''}
+  .stage .sn{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.1em}
+  .stage b{display:block;font-size:13px;margin:4px 0 5px}
+  .stage span{font-size:11px;color:var(--muted);line-height:1.5;display:block}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+  .kv{font-size:12px;color:var(--muted)}
+  .roadmap{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+  .phase{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:8px;padding:14px}
+  .phase b{font-size:13px} .phase .t{font-size:11px;color:var(--accent);font-weight:700;margin-bottom:5px;letter-spacing:.08em}
+  .phase ul{padding-left:16px;font-size:11.5px;color:var(--muted)}
+  .dec{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:14px 18px;margin:10px 0}
+  .dec b{color:var(--accent)}
+  footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px}
+  @media (max-width:900px){.cards,.roadmap{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.layer{grid-template-columns:1fr}.layer .ln{border-right:none;border-bottom:1px solid var(--line)}}
+  @media print{body{background:#fff}.wrap{max-width:100%;padding:0}pre{background:#f4f6f9;color:#1a2230;border:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architecture Review · v0.1 · 2026-11-23</div>
+  <h1>Windows 本地 EPUB → 分章节有声书自动化框架</h1>
+  <div class="sub">CLI-first ／ 代码驱动 ／ 大模型友好 ／ 原生 MCP 控制 ／ 本地 GPU 离线合成</div>
+  <div class="meta">
+    <span class="tag">工作代号 <b>bookctl</b></span>
+    <span class="tag">调研方式 <b>3 路并行联网调研 + 2 组检索</b></span>
+    <span class="tag">状态 <b>待架构师评审</b></span>
+    <span class="tag">默认引擎 <b>CosyVoice 3</b></span>
+  </div>
+</header>
+
+<div class="cards">
+  <div class="card"><div class="k">核心定位</div><div class="v">补一层控制面</div><div class="d">现有项目都是「给人用的转换器」，没有一个是「给系统用的可编排流水线」。</div></div>
+  <div class="card"><div class="k">默认 TTS</div><div class="v">CosyVoice 3</div><div class="d">双 Apache-2.0、中文 CER 0.81%(RL)、内置 TN、Win11+3060 6GB 实测可跑。</div></div>
+  <div class="card"><div class="k">任务模型</div><div class="v">异步 Job</div><div class="d">秒级返回 job_id；章节级 checkpoint、幂等键、断点续传、协作式取消。</div></div>
+  <div class="card"><div class="k">20 万字书</div><div class="v">≈ 2.3–4.6 h</div><div class="d">≈15.3 小时音频，按 RTF 0.15–0.30 折算的单卡 GPU 时间。</div></div>
+</div>
+
+<h2>1 · 为什么值得做：现有方案的共同缺口</h2>
+<table>
+  <thead><tr><th style="width:150px">项目</th><th>后端</th><th>相对本需求的致命缺口</th></tr></thead>
+  <tbody>
+    <tr><td><b>audiblez</b> v4</td><td>Kokoro-82M</td><td>中文仅 partial、无音色克隆、&gt;400 token 赶速；交互选章节，无 job/API/MCP</td></tr>
+    <tr><td><b>ebook2audiobook</b></td><td>默认 XTTS-v2</td><td><span class="pill p-no">许可死路</span> XTTS 权重 CPML 明确非商用且 Coqui 已注销；Gradio 0.0.0.0 无鉴权；无状态机</td></tr>
+    <tr><td><b>epub2tts</b> / -kokoro</td><td>XTTS / Kokoro</td><td>章节预处理全手工；Windows DeepSpeed 难装；无机器可读控制面</td></tr>
+    <tr><td><b>Audiobook-Creator</b></td><td>Kokoro / 云端</td><td>靠 Playwright 爬站点；无离线 GPU 引擎抽象</td></tr>
+    <tr><td><b>Pandrator</b></td><td>XTTS 等多后端</td><td>重 GUI + 一键安装器，定位个人用户而非无人值守系统</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>结论：</b>没有一个默认后端同时满足「中文整本书 + 2026 级自然度 + 许可证干净可商用」；没有一个把一本书建模成可持久化、可中断、可查询、可取消、可幂等重入的 Job；没有一个把 CLI 与 MCP 统一到同一份 handler。这就是本框架的立足点：<b>TTS 引擎只是可插拔 Provider，护城河在工程化控制面与可复现流水线。</b></div>
+
+<h2>2 · 四层架构（CLI 与 MCP 共用同一份 handler）</h2>
+<div class="layer L1">
+  <div class="ln">L1 控制面<small>薄 · 秒级响应 · 无状态</small></div>
+  <div class="lc"><div class="mods">
+    <div class="mod"><b>CLI · bookctl.exe</b><span>Typer / JSON envelope / 退出码 / --capabilities --schema --dry-run</span></div>
+    <div class="mod"><b>MCP Server · mcp 2.3.x</b><span>stdio 主 + Streamable HTTP 选 / tools + resources + prompts</span></div>
+    <div class="mod"><b>共用 Handler</b><span>纯数据 I/O：不 print、不 exit、不认识 JSON 或 text</span></div>
+  </div></div>
+</div>
+<div class="layer L2">
+  <div class="ln">L2 编排层<small>唯一有状态的组件</small></div>
+  <div class="lc"><div class="mods">
+    <div class="mod"><b>Job Manager</b><span>SQLite WAL · ULID · 幂等键 · revision CAS · 状态机</span></div>
+    <div class="mod"><b>Checkpoint</b><span>章节级原子落盘，失败只重跑一章</span></div>
+    <div class="mod"><b>GPU 单实例锁</b><span>显存预算 · 排队不抢卡 · Job Object 强杀进程树</span></div>
+    <div class="mod"><b>事件日志</b><span>NDJSON 单调 cursor · heartbeat.json</span></div>
+  </div></div>
+</div>
+<div class="layer L3">
+  <div class="ln">L3 流水线<small>6 Stage DAG · 可单独调用 / 可补偿</small></div>
+  <div class="lc"><div class="mods">
+    <div class="mod"><b>S1 ingest</b><span>zip/OPF 校验 · DRM 判定</span></div>
+    <div class="mod"><b>S2 split</b><span>nav/NCX + TOC anchor 切章</span></div>
+    <div class="mod"><b>S3 normalize</b><span>语义块 · 中文 TN · 发音词典 · 分句</span></div>
+    <div class="mod"><b>S4 synth</b><span>profile 锁音色 · 段级缓存 · Provider</span></div>
+    <div class="mod"><b>S5 verify</b><span>Whisper ASR 回验 · 失败段重生成</span></div>
+    <div class="mod"><b>S6 master</b><span>两遍 loudnorm · M4B 章节标记</span></div>
+  </div></div>
+</div>
+<div class="layer L4">
+  <div class="ln">L4 引擎层<small>可插拔 · 进程隔离</small></div>
+  <div class="lc"><div class="mods">
+    <div class="mod"><b>TTS Provider</b><span>CosyVoice3 默认 / Qwen3-TTS / VoxCPM2 / GPT-SoVITS / Kokoro 校样</span></div>
+    <div class="mod"><b>ASR</b><span>faster-whisper / FunASR（回验）</span></div>
+    <div class="mod"><b>Audio</b><span>ffmpeg + ffmetadata</span></div>
+  </div><div class="kv" style="margin-top:10px">横切：workspace/&lt;book-id&gt; 产物与 manifest　·　doctor 自检 / 显存告警 / 可观测</div></div>
+</div>
+<div class="warn"><b>进程形态：</b>CLI/MCP 是短命控制面，重活在<b>常驻 Worker（已登录用户会话中的 daemon）</b>。不要做成 SYSTEM 服务 —— Session 0 看不到交互式 GPU。类比 Ollama：CLI 是遥控器，daemon 扛重活，客户端断开或 MCP host 重启都不影响任务推进。</div>
+
+<h2>3 · 数据流水线：一本书怎么变成分类好的音频</h2>
+<div class="flow">
+  <div class="stage"><div class="sn">S1 INGEST</div><b>校验与元数据</b><span>container.xml / OPF / spine；<code>encryption.xml</code> 只含字体混淆≠DRM；输出 book.json</span></div>
+  <div class="stage"><div class="sn">S2 SPLIT</div><b>按目录切章</b><span>nav.xhtml / NCX + TOC anchor 二次切分；分类 frontmatter / body / appendix / footnote</span></div>
+  <div class="stage"><div class="sn">S3 NORMALIZE</div><b>文本前端</b><span>语义块清洗 → WeTextProcessing TN → 专名发音词典 → 语义分句 20–80 字</span></div>
+  <div class="stage"><div class="sn">S4 SYNTH</div><b>本地 GPU 合成</b><span>锁定 profile_hash；全书只算一次音色；段级内容寻址缓存；逐段 WAV</span></div>
+  <div class="stage"><div class="sn">S5 VERIFY</div><b>ASR 回验</b><span>转写与 text_norm 比对 CER；&gt;5% 换 seed 重生成；静音/时长/削波抽检</span></div>
+  <div class="stage"><div class="sn">S6 MASTER</div><b>母带与导出</b><span>两遍 loudnorm(-16 LUFS) → 每章独立 m4a → 整本 M4B + CHAPTER 标记 + manifest</span></div>
+</div>
+<div class="box">
+  <h3 style="margin-top:0">三个最容易被低估的工程点</h3>
+  <ul>
+    <li><b>不要用 EbookLib 做语义切分</b>：它只做对象级读写，且是 <b>AGPL-3.0</b>。自写 <code>zipfile + lxml</code> 轻量解析器（约 300–500 行）换零许可风险与完全可控的 anchor 切分。</li>
+    <li><b>保留两份文本</b>：<code>text_raw</code> 与 <code>text_norm</code> 附字符偏移映射 —— "念错一个字 → 定位原文 → 只重生成该段" 才能闭环。</li>
+    <li><b>音色一致性</b>：全书只计算一次 speaker prompt 生成 <code>profile_hash</code>，所有段落复用；禁止逐段重新克隆 / 随机 seed。固定全局风格向量 + 短句化可抑制 500 字后的语调漂移。</li>
+  </ul>
+</div>
+
+<h2>4 · 技术选型（含明确排除清单）</h2>
+<table>
+  <thead><tr><th style="width:130px">决策位</th><th style="width:190px">引擎</th><th>依据</th><th style="width:210px">代价 / 注意</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill p-main">默认主选</span></td><td><b>CosyVoice 3</b><br><span class="kv">Fun-CosyVoice3-0.5B-2512_RL</span></td><td>代码+权重双 Apache-2.0；中文 CER 1.21%→<b>0.81%(RL)</b>（人类 1.26%）；<b>内置自训练 TN，数字/日期/符号直接读</b>；拼音修正多音字；Win11 + RTX 3060 6GB 有实测通路；vLLM / TRT-LLM 4× / FastAPI+gRPC</td><td>依赖链重：Python 锁 3.10、submodules、sox、<code>openai-whisper</code> 安装顺序坑；服务化推荐 16GB</td></tr>
+    <tr><td><span class="pill p-alt">备选 A</span></td><td><b>Qwen3-TTS</b><br><span class="kv">12Hz-1.7B / 0.6B</span></td><td>长文本硬指标最强：10 分钟 WER 2.36%；第三方 21 分钟/1.2 万字无吞音重复、音色 92.3%±1.7%；Apache-2.0；VoiceDesign 免参考音频</td><td>RTF ≈1.26 @3090（慢于实时），整本约 19h GPU；Windows 部署资料少</td></tr>
+    <tr><td><span class="pill p-alt">备选 B</span></td><td><b>VoxCPM2</b></td><td>双 Apache-2.0、48kHz、免参考音频、8GB / 5GB 权重、RTF 0.30→0.13；6.25Hz patch 天生适合长序列</td><td>官方承认长文本会漂移，必须分块；Windows Triton 需 <code>optimize=False</code></td></tr>
+    <tr><td><span class="pill p-alt">备选 C</span></td><td><b>GPT-SoVITS V4</b></td><td>4–8GB、<b>RTF 0.014 @4090</b> 吞吐之王、MIT、Windows 一键包、微调后音色最稳</td><td>需 1 分钟干净干音 + ASR 标注校对；标注错全崩；24kHz</td></tr>
+    <tr><td><span class="pill p-mid">仅校样</span></td><td><b>Kokoro-82M</b></td><td>Apache-2.0、310MB、CPU 可跑，用于流水线冒烟测试 / 无 GPU 兜底</td><td><b>不作交付引擎</b>：中文 partial、无克隆、&gt;400 token 赶速</td></tr>
+  </tbody>
+</table>
+<h3>明确排除（建议写进 ADR，防止后期"顺手换回来"）</h3>
+<table>
+  <thead><tr><th style="width:190px">引擎</th><th>否决理由</th></tr></thead>
+  <tbody>
+    <tr><td><b>Coqui XTTS-v2</b></td><td><span class="pill p-no">许可死路</span> CPML 1.0 明确非商用，且 Coqui 公司 2024-01 倒闭、coqui.ai/cpml 已 404，<b>再无主体可签发商用许可</b>（ebook2audiobook 默认就是它）</td></tr>
+    <tr><td><b>F5-TTS 官方权重</b></td><td>权重 CC-BY-NC-4.0（Emilia 数据），代码 MIT 救不了</td></tr>
+    <tr><td><b>微软 VibeVoice</b></td><td>90 分钟不漂移很诱人，但<b>每个文件强制插入可听的 "This segment was generated by AI" + 水印</b>，模型卡 research-only → 有声书不可用</td></tr>
+    <tr><td><b>Fish Speech S2-Pro / Drama 3</b></td><td>S2-Pro 权重研究非商用；Drama 3 需 ≥48GB FP8 且仅 Linux/WSL 文档化；社区许可禁托管</td></tr>
+    <tr><td><b>ChatTTS / Bark / WhisperSpeech</b></td><td>AGPL+CC-BY-NC 双限 / 架构性 13 秒上限且幻觉多 / <b>发布版仅英语，不支持中文</b></td></tr>
+    <tr><td><b>IndexTTS-2.5</b></td><td>条件商用许可 + Windows DeepSpeed / CUDA 12.8+ / triton-windows 坑 + <b>分段拼接处韵律不连贯</b>；可留作后续实验 Provider，不进 v1 默认</td></tr>
+  </tbody>
+</table>
+<div class="warn">CER / WER / RTF / 显存多为厂商自报或单一第三方实测，硬件与精度不同不可横向相减。<b>Phase 0 必须在目标机上做同章同 profile 的 A/B 盲测再冻结引擎。</b></div>
+
+<h2>5 · 产物契约：「分类整理好」的落地定义</h2>
+<pre>workspace/&lt;book-id&gt;/                     # book-id = sha256(epub)[:12]
+├── manifest.json                       # 全书总账：元数据 + 每章状态 + profile_hash + config_hash
+├── book.json / chapters.json / segments.json
+├── pronunciation.toml                  # 可编辑：专名 → 拼音/读法（进 profile_hash）
+├── audio/
+│   ├── chapters/
+│   │   ├── 0001_序章/            audio.m4a  chapter.json
+│   │   ├── 0002_第一章_xxx/      audio.m4a  chapter.json
+│   │   └── ...
+│   └── book.m4b                        # 整书：CHAPTER 标记 + 封面 + 作者（media_type=2）
+├── book.ffmetadata / cover.jpg
+├── checkpoints/                        # 章节级断点 + profile.json
+├── logs/job.ndjson                     # 单调递增 cursor 事件流
+└── qc/report.json                      # ASR 回验 / 响度 / 静音抽检</pre>
+<p class="kv">manifest 每章记录：id / index / title / kind / audio 路径 / sha256 / 秒数 / status / qc.cer / qc.lufs / source.href+anchor。这就是给大模型读的地图。</p>
+
+<h2>6 · 控制面契约</h2>
+<div class="cols">
+  <div class="box" style="margin-top:0">
+    <h3 style="margin-top:0">CLI · 统一 JSON envelope</h3>
+    <p class="kv">stdout 只出数据，stderr 只出日志；非 TTY 强制 json；CMD 与 PowerShell 5.1 各给一套示例。</p>
+    <table style="font-size:12px">
+      <tr><th>类别</th><th>命令</th></tr>
+      <tr><td>自省</td><td><code>--capabilities</code> <code>--schema</code> <code>doctor</code> <code>version</code></td></tr>
+      <tr><td>只读探测</td><td><code>book inspect</code> <code>book chapters</code> <code>book plan --dry-run</code></td></tr>
+      <tr><td>引擎</td><td><code>engine list</code> <code>engine test</code></td></tr>
+      <tr><td><b>任务</b></td><td><code>job start</code> <code>status</code> <code>list</code> <code>logs</code> <code>cancel</code> <code>resume</code> <code>artifacts</code></td></tr>
+      <tr><td>导出/服务</td><td><code>book export</code> <code>serve</code> <code>mcp serve</code></td></tr>
+    </table>
+    <p class="kv">退出码：0 成功（异步为 queued）· 2 参数 · 3 not found · 5 冲突/非法转移 · 69|75 可重试 · 130 取消</p>
+  </div>
+  <div class="box" style="margin-top:0">
+    <h3 style="margin-top:0">MCP · 薄适配，SLA ≤ 2s</h3>
+    <p class="kv">任何 &gt;2s 的操作只做提交/查询/取消，立即返回 <code>job_id</code>。顶层 structuredContent 一律 object。</p>
+    <table style="font-size:12px">
+      <tr><th>tool</th><th>要点</th></tr>
+      <tr><td><code>capabilities</code> <code>plan</code></td><td>自描述 + 可验证 dry-run</td></tr>
+      <tr><td><code>job_start</code></td><td>job_id + resources{} + poll_interval_ms</td></tr>
+      <tr><td><code>job_status</code> <code>job_logs</code></td><td>单调 progress / NDJSON cursor</td></tr>
+      <tr><td><code>job_cancel</code> <code>job_resume</code></td><td>协作式 / 断点续传</td></tr>
+      <tr><td><code>job_artifacts</code></td><td>返回 resource_link，<b>不嵌二进制</b></td></tr>
+      <tr><td><code>book_inspect</code> <code>doctor</code></td><td>只读探测与自检</td></tr>
+    </table>
+    <p class="kv">Resources：<code>job:///{id}/manifest.json|log.ndjson|artifacts/*</code>；Prompts：<code>operate_playbook</code> 把标准编排顺序直接喂给宿主模型。</p>
+  </div>
+</div>
+<div class="note"><b>MCP 2026 现状：</b>最新修订 2026-07-28 移除 <code>initialize</code>/session、新增 <code>server/discover</code>、日志改走 stderr、<b>移除 SSE 可恢复性（断流即丢 in-flight 请求）</b>、Tasks 降为 Beta 扩展。实现要双版本兼容（2026-07-28 + 2025-11-25）；<b>显式 job_* tools 才是唯一稳定面</b>，Tasks 只做可选增强。Windows stdio 三大坑：stdout 用 <code>buffer.write(utf-8 bytes)+flush</code>（<code>chcp 65001</code> 救不了管道，cp936 截帧会造成"工具列表假缓存"）、日志全走 stderr、<code>env</code> 注入 <code>PYTHONUTF8=1</code>。</div>
+
+<h3>任务状态机</h3>
+<pre>job_start ─► queued ─► running ◄──► paused
+                │         │  ▲          │
+       cancel ───┤         │  │ resume   ├─► cancel_requested ─► cancelled (终态)
+                │         ▼  │          │
+                │    input_required ────┘
+                │         ├──► completed (终态，result.json 原子落盘)
+                │         └──► failed (终态；retryable + checkpoint 经 job_resume 回 running)
+                └─────────────────────► cancelled</pre>
+<p class="kv">revision CAS 乐观锁防双启动；progress.monotonic 全局单调递增、换 phase 不归零；章节级为主控粒度，句子级只进 NDJSON 日志；幂等键同参返回逐字节一致输出，异参退出码 5。</p>
+
+<h2>7 · 质量保障与 Windows 部署要点</h2>
+<div class="cols">
+  <div class="box" style="margin-top:0">
+    <h3 style="margin-top:0">质量闭环</h3>
+    <ul>
+      <li><b>ASR 回验</b>：合成 → faster-whisper 转写 → ITN 归一化比对 CER；&gt;5% 自动换 seed / 提高 repetition_penalty 重生成</li>
+      <li><b>母带</b>：ffmpeg <b>两遍</b> loudnorm（-16 LUFS、<code>linear=true</code>、显式 <code>-ar 48000</code>）；单遍会 riding gain 导致章首爆音</li>
+      <li><b>拼接</b>：12ms fade + 段落停顿 + 章末静音</li>
+      <li><b>缓存</b>：段 key = sha256(text_norm + profile_hash + engine_version + params)，重跑不重复烧 GPU</li>
+    </ul>
+  </div>
+  <div class="box" style="margin-top:0">
+    <h3 style="margin-top:0">Windows 必写进手册的坑</h3>
+    <ul>
+      <li><code>TORCH_COMPILE_DISABLE=1</code>：&lt;16GB 卡首次合成触发 Triton 内核编译，出声前就 OOM</li>
+      <li>CUDA ≥12.8（Blackwell 50 系必须）；锁 <code>triton-windows 3.4.x</code>；不用 DeepSpeed</li>
+      <li>CosyVoice3 锁 Python 3.10，<code>openai-whisper</code> 单独装否则重拉 PyTorch</li>
+      <li><code>activeCodePage=UTF-8</code> 应用清单 + <code>longPathAware</code>；中文路径双引号</li>
+      <li>PowerShell 5.1 无 <code>&amp;&amp;</code>；重定向默认 UTF-16LE</li>
+    </ul>
+  </div>
+</div>
+
+<h2>8 · 实施路线图</h2>
+<div class="roadmap">
+  <div class="phase"><div class="t">P0 · 技术验证</div><b>先别写框架</b><ul><li>4 引擎同章同 profile A/B 盲测</li><li>M4B 章节标记可行性</li><li>Windows 依赖脚本</li><li><b>冻结默认引擎与 profile</b></li></ul></div>
+  <div class="phase"><div class="t">P1 · 最小闭环</div><b>S1→S2→S4→S6</b><ul><li>CLI inspect/chapters + job start/status/logs</li><li>每章 m4a + manifest.json</li><li>断电后 resume 只重跑未完成章</li></ul></div>
+  <div class="phase"><div class="t">P2 · 质量与控制面</div><b>补齐 S3/S5 + MCP</b><ul><li>TN / 发音词典 / ASR 回验</li><li>两遍 loudnorm + 整书 M4B</li><li>MCP Server + capabilities/schema/dry-run</li></ul></div>
+  <div class="phase"><div class="t">P3 · 产品化</div><b>分发与规模化</b><ul><li>多 Provider 热切换、批量书库</li><li>portable zip / PyInstaller / MCPB</li><li>质量报表、Tasks 扩展可选增强</li></ul></div>
+</div>
+
+<h2>9 · 需要你拍板的 6 个决策点</h2>
+<div class="dec"><b>D1 引擎</b>　默认按本报告选 CosyVoice3？还是先只做 Kokoro 校样链路验证控制面、引擎后置？</div>
+<div class="dec"><b>D2 音色来源</b>　预设音色 / 用户提供 10–30s 参考音频克隆 / 纯文字 VoiceDesign？</div>
+<div class="dec"><b>D3 交付形态</b>　仅分章文件，还是同时强制出整本 M4B？</div>
+<div class="dec"><b>D4 ASR 回验</b>　全量 / 每章抽检 / 默认关闭（速度优先）？</div>
+<div class="dec"><b>D5 Worker 形态</b>　常驻 daemon（推荐）还是 CLI 进程内跑（简单但断连即停）？</div>
+<div class="dec"><b>D6 分发</b>　portable zip + uv（快）还是 PyInstaller 单 exe（免环境）？</div>
+
+<footer>
+  <b>参考来源（节选）</b>：<code>modelcontextprotocol.io/specification/2026-07-28/changelog</code> · <code>github.com/QwenAudio/CosyVoice</code> · <code>qwen.ai/blog?id=qwen3tts-0115</code> · <code>github.com/OpenBMB/VoxCPM</code> · <code>github.com/wenet-e2e/WeTextProcessing</code> · <code>github.com/DrewThomasson/ebook2audiobook</code> · <code>github.com/santinic/audiblez</code> · <code>github.com/aedocw/epub2tts</code> · <code>smallest.ai/blog/long-form-tts-...</code> · <code>clig.dev</code><br><br>
+  免责：CER / WER / RTF / 显存 / 许可证结论来自 2026-11 公开资料，商用前请复核各权重卡 LICENSE 原文并经法务确认；克隆真人声音需另行取得声音权授权。本稿为评审用架构设计，尚未实现。
+</footer>
+
+</div>
+</body>
+</html>

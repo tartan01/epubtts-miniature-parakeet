@@ -1,0 +1,8 @@
+{
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "dotnet.defaultSolution": "bookctl.sln",
+  "omnisharp.enableEditorConfigSupport": true,
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "[csharp]": { "editor.formatOnSave": true }
+}

@@ -1,0 +1,16 @@
+{
+  "config_version": "v0.2",
+  "workspace_root": "",
+  "engine_mode": "mock",
+  "sidecar_url": "http://127.0.0.1:8765",
+  "voice": "zh-default",
+  "speed": 1.0,
+  "sample_rate": 24000,
+  "seed": 42,
+  "include_kinds": ["body", "frontmatter"],
+  "generate_m4b": true,
+  "verify": false,
+  "max_concurrent_jobs": 1,
+  "ffmpeg_path": "",
+  "chars_per_minute": 210
+}

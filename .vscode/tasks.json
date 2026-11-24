@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build:all",
+      "command": "dotnet",
+      "args": ["build", "bookctl.sln", "-c", "Debug"],
+      "type": "process",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build:app",
+      "command": "dotnet",
+      "args": ["build", "src/BookCtl.App/BookCtl.App.csproj", "-c", "Debug", "-r", "win-x64"],
+      "type": "process",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "run:cli-demo",
+      "command": "dotnet",
+      "args": ["run", "--project", "src/BookCtl.Cli/BookCtl.Cli.csproj", "--", "capabilities"],
+      "type": "process",
+      "problemMatcher": []
+    },
+    {
+      "label": "run:mcp",
+      "command": "dotnet",
+      "args": ["run", "--project", "src/BookCtl.Mcp/BookCtl.Mcp.csproj"],
+      "type": "process",
+      "problemMatcher": []
+    },
+    {
+      "label": "run:sidecar",
+      "command": "python",
+      "args": ["engine/tts_server.py", "--mode", "mock", "--port", "8765"],
+      "type": "process",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

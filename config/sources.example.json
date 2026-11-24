@@ -1,0 +1,43 @@
+{
+  "//": "自定义引擎/模型源示例：复制为 sources/catalog.user.json（便携版在程序目录，安装版在 %LOCALAPPDATA%\\bookctl\\sources\\catalog.user.json）即可生效。同 id 会覆盖内置条目。",
+  "version": "1",
+  "entries": [
+    {
+      "id": "sherpa-vits-zh-fanchen",
+      "name": "sherpa-onnx · 中文 VITS（Fanchen）· 内网镜像",
+      "engine": "sherpa",
+      "kind": "model",
+      "device": "cpu",
+      "sizeMb": 130,
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models",
+      "note": "企业内网镜像示例：把 url 换成内网制品库地址，mirrors 可留空",
+      "install": {
+        "type": "archive",
+        "url": "https://nexus.example.internal/repository/tts-models/vits-zh-hf-fanchen-C.tar.bz2",
+        "target": "sherpa-vits-zh-fanchen",
+        "mirrors": []
+      }
+    },
+    {
+      "id": "my-custom-model",
+      "name": "自建音色模型（示例）",
+      "engine": "sherpa",
+      "kind": "model",
+      "device": "cpu",
+      "sizeMb": 80,
+      "license": "内部授权",
+      "homepage": "",
+      "note": "多文件直下的写法：type=file + files[]",
+      "install": {
+        "type": "file",
+        "target": "my-custom-model",
+        "files": [
+          { "name": "model.onnx", "url": "https://files.example.internal/model.onnx" },
+          { "name": "tokens.txt", "url": "https://files.example.internal/tokens.txt" },
+          { "name": "lexicon.txt", "url": "https://files.example.internal/lexicon.txt" }
+        ]
+      }
+    }
+  ]
+}

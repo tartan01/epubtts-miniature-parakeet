@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS8618;CS8601;CS8603</NoWarn>
+    <WindowsAppSDKVersion Condition="'$(WindowsAppSDKVersion)' == ''">2.7.0</WindowsAppSDKVersion>
+    <WindowsSDKBuildToolsVersion Condition="'$(WindowsSDKBuildToolsVersion)' == ''">10.0.*</WindowsSDKBuildToolsVersion>
+  </PropertyGroup>
+</Project>
