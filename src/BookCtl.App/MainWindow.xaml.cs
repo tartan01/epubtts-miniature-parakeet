@@ -2,7 +2,9 @@ using BookCtl.Core;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -62,8 +64,9 @@ public sealed partial class MainWindow : Window
             var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
             if (args.Any(a => a.Equals("--detailed", StringComparison.OrdinalIgnoreCase)))
                 _vm.IsSimpleMode = false;
+            // 拖放 / 文件选择 / 命令行 / 文件关联统一走 ImportEpub，导入行为只有一份实现。
             var epub = args.FirstOrDefault(a => a.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) && File.Exists(a));
-            if (epub is not null) _vm.InputPath = Path.GetFullPath(epub);
+            if (epub is not null) _vm.ImportEpub(epub);
 
             // --auto-start：命令行 / 文件关联直接开始生成，满足"导入 epub 即生成朗读音频"。
             // 通过 Dispatcher 排队，确保窗口与事件订阅就绪后才启动 worker，避免事件早于 UI。
@@ -90,7 +93,51 @@ public sealed partial class MainWindow : Window
         picker.FileTypeFilter.Add(".epub");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
         var file = await picker.PickSingleFileAsync();
-        if (file is not null) _vm.InputPath = file.Path;
+        if (file is not null) _vm.ImportEpub(file.Path);
+    }
+
+    // ——— 拖放导入（Windows 原生 Drag & Drop，简洁/详细两种模式通用）———
+
+    private void ShowDropOverlay(bool show) =>
+        DropOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+    private void Root_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            ShowDropOverlay(false);
+            return;
+        }
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        e.Handled = true;
+        ShowDropOverlay(true);
+    }
+
+    private void Root_DragLeave(object sender, DragEventArgs e) => ShowDropOverlay(false);
+
+    private async void Root_Drop(object sender, DragEventArgs e)
+    {
+        ShowDropOverlay(false);
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.Handled = true;
+        try
+        {
+            // 一次可拖入多个文件，取第一个 .epub；只认扩展名，不做内容探测。
+            var items = await e.DataView.GetStorageItemsAsync();
+            var file = items.OfType<StorageFile>().FirstOrDefault(
+                f => f.Path.EndsWith(".epub", StringComparison.OrdinalIgnoreCase));
+            if (file is null)
+            {
+                _vm.NotifyImportFailed("拖入的内容里没有 .epub 文件，请拖入 EPUB 电子书");
+                return;
+            }
+            _vm.ImportEpub(file.Path);
+        }
+        catch (Exception ex)
+        {
+            _vm.NotifyImportFailed($"拖入失败：{ex.Message}");
+        }
     }
 
     private void Start_Click(object sender, RoutedEventArgs e) => _vm.Start();

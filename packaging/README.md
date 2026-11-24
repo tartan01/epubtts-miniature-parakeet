@@ -5,15 +5,22 @@
 | 形态 | 产物 | 数据位置 | 适用 |
 |---|---|---|---|
 | **便携版**（Pro Portable） | `dist\本地朗读工厂-<ver>-win-x64.zip` | 程序目录内 `data\`、`sources\`（存在 `portable.marker`） | U 盘 / 离线机 / 免安装客户 |
+| **Slim 轻量版** | `dist\本地朗读工厂-<ver>-win-x64-slim.zip` | 同上 | 体积敏感；CLI 需 .NET 10（GUI 零依赖） |
 | **安装版**（Pro Setup） | `dist\本地朗读工厂-<ver>-setup.exe` | `%LOCALAPPDATA%\bookctl\` | 普通用户、桌面快捷方式、`.epub` 关联 |
 
 两版都是 **self-contained + WindowsAppSDKSelfContained**：目标机不需要装 .NET 10，也不需要 Windows App Runtime。
 
 ## 一、构建
 
+**最省事**：`packaging\make-release.cmd`（标准）或 `make-release.cmd -Slim`（轻量），一条命令产出便携包；
+装了 Inno Setup 会顺带产出 setup.exe。下面是拆开的等价步骤。
+
+实测体积（2026-11-24）：标准 **475 MB / zip 198 MB**；Slim **200 MB / zip 78 MB**。
+
 ```powershell
-# 1) 便携版（发布 + 目录整理 + zip）
+# 1) 便携版（发布 + 补齐 WinUI XAML 资源 + 目录整理 + zip）
 powershell -ExecutionPolicy Bypass -File packaging\build-portable.ps1 -Version 0.3.0
+powershell -ExecutionPolicy Bypass -File packaging\build-portable.ps1 -Version 0.3.0 -Slim
 
 # 2) 签名（强烈建议：不签名 = 首次运行会被 SmartScreen 拦）
 powershell -ExecutionPolicy Bypass -File packaging\sign.ps1 -Path dist\本地朗读工厂-0.3.0-win-x64

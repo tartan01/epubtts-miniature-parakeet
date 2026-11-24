@@ -10,7 +10,8 @@
 
 一个把 `.epub` 整本书在**本地**（CPU 或显卡）转成「按章节分类整理好的朗读音频」的 Windows 桌面软件：
 
-- **两种界面模式**：*简洁模式*（选书 → 一键生成，自动选 CPU 轻量引擎）／*详细参数模式*（引擎/音色/显卡/语速/M4B 全可控）
+- **两种界面模式**：*简洁模式*（拖入书 → 一键生成，自动选 CPU 轻量引擎）／*详细参数模式*（引擎/音色/显卡/语速/M4B 全可控）
+- **拖放导入**：桌面或资源管理器里的 `.epub` 直接拖进窗口即可，两种模式通用，不用再点「浏览」找路径
 - **推理设备可切换**：`auto / 纯 CPU / 纯 GPU / GPU+CPU 混合`，可指定显卡序号（0/1/2），完全交给用户决定
 - **引擎与模型源管理**：内置源清单 + 一键下载到本地 + 校验 + 自动镜像回退（国内直连 GitHub 会 502）
 - **CLI 一等公民**：`bookctl.exe`，JSON envelope、稳定退出码、幂等、断点续传
@@ -38,9 +39,28 @@
 
 > **构建状态（2026-11-24 实测）**：本机已安装 .NET SDK 10.0.404，`dotnet build bookctl.sln` **全解决方案 0 error 0 warning 通过**，
 > WinUI App 已实际启动并渲染窗口；mock 引擎端到端跑通（3 章 EPUB → 分章 `audio.wav` + `audio.m4a` + 整本 `book.m4b`，含中文章节标记）。
-> 实测中发现并已修复 12 个真实缺陷（含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），详见 §7「已修复的实测缺陷」。
+> 实测中发现并已修复 **21 条缺陷/问题**（12 个运行期缺陷 + 9 条结构/交互/分发问题，含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），详见 §7.1。
 
-## 2. 构建
+## 2. 构建与一键入口
+
+**只想跑起来**：双击仓库根目录的 **`启动.cmd`** —— 它自动找最新的便携包或 Debug 构建里的
+`BookCtl.App.exe` 并启动，也可以把 `.epub` 路径当参数传进去。
+
+**想验证改动没坏**：双击 **`build.cmd`** —— 编译全解决方案 → 单独重建 App → 跑 mock 回归，一条命令闭环。
+
+本机 `dotnet` 不在 PATH，两个脚本都写死了绝对路径 `C:\Program Files\dotnet\dotnet.exe`。
+
+**exe 到底在哪**（`BookCtl.App.exe` 是唯一 GUI 入口，其余三个是命令行工具，不能双击当界面用）：
+
+| 你要的 | 路径 |
+|---|---|
+| 桌面程序（开发态） | `src\BookCtl.App\bin\Debug\net10.0-windows10.0.19041.0\win-x64\BookCtl.App.exe` |
+| 桌面程序（便携包） | `dist\本地朗读工厂-<版本>-win-x64\BookCtl.App.exe` |
+| 命令行 CLI | `src\BookCtl.Cli\bin\Debug\net10.0\bookctl.exe` |
+| MCP 服务 | `src\BookCtl.Mcp\bin\Debug\net10.0\bookctl-mcp.exe` |
+| 后台 Worker | `src\BookCtl.Worker\bin\Debug\net10.0\bookctl-worker.exe` |
+
+手动构建：
 
 ```powershell
 dotnet build bookctl.sln -c Debug
@@ -71,9 +91,10 @@ dotnet run --project src/BookCtl.Cli -- job list
 完成后到工作区（默认 `%LOCALAPPDATA%\bookctl\workspace\<book-id>_<书名>\`）检查：
 `manifest.json`、`audio/chapters/0001_序章/audio.wav(.m4a)`、`book.m4b`、`chapters.json`、`qc/report.json`。
 
-**桌面软件**：VS Code 打开本目录按 F5（`.vscode/launch.json` 已配好），或直接双击上面第 1 个 exe。
-界面 = 选择 EPUB → 引擎/音色/语速/M4B → 「一键生成朗读音频」 → 中控台实时看阶段、显卡利用率、TTS 段进度、速度与 ETA →
-完成后「打开项目文档文件夹」。
+**桌面软件**：VS Code 打开本目录按 F5（`.vscode/launch.json` 已配好），或双击仓库根目录的 `启动.cmd`。
+界面 = **把 `.epub` 直接拖进窗口**（或点「浏览…」）→ 引擎/音色/语速/M4B → 「一键生成朗读音频」 →
+中控台实时看阶段、显卡利用率、TTS 段进度、速度与 ETA → 完成后「打开项目文档文件夹」。
+命令行也支持 `BookCtl.App.exe "D:\books\某书.epub" --auto-start`（安装版注册 `.epub` 关联后双击书同效）。
 
 ## 4. CLI 速查（详见 `bookctl` 帮助与总架构 §6.1）
 
@@ -147,6 +168,13 @@ mock 引擎全链路、GPU 监控（nvidia-smi）、WAV 拼接 + ffmpeg M4B/ffme
 | 11 | `build-portable.ps1` 直接语法崩溃 `意外的标记":"` | 脚本 UTF-8 无 BOM，PowerShell 5.1 按 GBK 解码，中文把 here-string 打乱 | 三个打包脚本统一加 UTF-8 BOM；`edition.json` 显式写无 BOM UTF-8；engine 拷贝跳过 `.venv` |
 | 12 | 产物 `manifest.json` 的 `status` 永远是 `running`，DB 里其实已 `completed` | manifest 在 job 终态落定**之前**写出 | 先更新 job 终态并存库，再写 `manifest.json` 与 `qc/report.json` |
 
+**2026-11-24 晚（v0.4）追加 9 条**，完整条目见 `docs/defects.md` #13–#21。最重要的一条是 **#20**：
+`dotnet publish` 没有复制 WinUI 的 `*.xbf` 与 `BookCtl.App.pri`，导致免安装包双击即崩（`0xC000027B`）。
+**此前交付的便携包一直是坏的**（#21，上一轮只验证了路径解析与 CLI，没真正双击 GUI）；本轮已修并逐个实测启动：
+`RUNNING / title=[本地朗读工厂] / responding=True`。
+其余为结构/交互/分发问题：找不到 exe（#13）、无拖放（#14）、导入逻辑分散（#15）、
+免安装包 473 MB 过重（#16）、脚本裸调 `dotnet`（#17）、`.cmd` 编码（#18）、`-Slim` 撞 safe-delete 阈值（#19）。
+
 附带修复：幂等命中 `failed/cancelled` 旧任务时 `run` 现在会**自动 resume**（原实现会立刻返回旧状态）；
 空/纯空白分段不再送 TTS（原会白跑一次推理）；`concat_list.txt` 内路径统一为正斜杠（ffmpeg concat 里 `\` 是转义符）；
 ffmpeg 解析增加 WinGet 包目录兜底扫描（刚装完 ffmpeg、PATH 未刷新时也能找到）。
@@ -210,26 +238,60 @@ bookctl source remove sherpa-vits-zh-fanchen
 ## 8. 目录结构
 
 ```
-bookctl.sln · Directory.Build.props · README.md · architecture-epub2audiobook.md（总架构）
+bookctl.sln · Directory.Build.props · README.md · HANDOVER.md · AGENTS.md
+启动.cmd · build.cmd                     # 唯一直达入口 / 一键构建+回归（见 §2）
+architecture-epub2audiobook.md / .html  # 总架构（唯一事实源 + 可视化评审版）
 config/bookctl.defaults.json            # 默认配置
 .vscode/                                # F5 调试与构建任务
+docs/                                   # 交接文档：workflows / decisions / defects / roadmap / conversation / screenshots
 src/BookCtl.Core/                       # 契约/模型/SQLite/EPUB/引擎/流水线/共用 Handler
-src/BookCtl.Cli/ src/BookCtl.Mcp/ src/BookCtl.Worker/    # 三个可执行入口
-src/BookCtl.App/                        # WinUI 3 桌面（App.xaml / MainWindow.xaml / MainViewModel.cs）
+src/BookCtl.Cli/ src/BookCtl.Mcp/ src/BookCtl.Worker/    # 三个命令行入口（共享 Core）
+src/BookCtl.App/                        # 唯一 GUI：WinUI 3（App.xaml / MainWindow.xaml / MainViewModel.cs）
 engine/tts_server.py + README.md + requirements.txt      # Python TTS sidecar（mock / sherpa / cosyvoice3）
-packaging/                              # build-portable.ps1 / bookctl.iss / sign.ps1 / README.md
+packaging/                              # build-portable.ps1 / make-release.cmd / bookctl.iss / sign.ps1 / README.md
 ```
+
+仓库顶层只有「源码 / 脚本 / 配置 / 文档」四类东西，其余全被 `.gitignore` 排除：
+
+| 层 | 位置 | 入库 |
+|---|---|---|
+| 源码 | `src/`、`engine/*.py`、`config/` | ✅ |
+| 构建/运行产物 | `src/**/bin`、`src/**/obj`、`engine/.venv`、`testdata/ws-*`、`*.wav/m4a/m4b`、`*.db*` | ❌ |
+| 分发包 | `dist/`（标准版 + `-slim` 轻量版）、`*.zip` | ❌ |
+| 模型权重 | `sources/`、`*.onnx`、`*.tar.bz2` | ❌ |
+
+> 口径提醒：**仓库很小（约 1.5 MB / 72 个文件）**，大的是工作目录（约 1.7 GB，全是 bin/obj/dist/.venv/音频）。
+> 觉得「怎么好几个 G」时先 `git ls-files | wc -l`，不要以为仓库臃肿。
 
 ## 9. 封装分发（Pro 版：便携版 + 安装版）
 
+**一条命令出便携版**（安装包需本机先装 Inno Setup 6；未装则只产便携版）：
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build-portable.ps1 -Version 0.3.0
+.\packaging\make-release.cmd            # 标准便携版（完全自包含）
+.\packaging\make-release.cmd -Slim      # 轻量便携版（CLI 工具需 .NET 10，GUI 仍零依赖）
+```
+
+等价的手工步骤：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build-portable.ps1 -Version 0.3.0 [-Slim]
 powershell -ExecutionPolicy Bypass -File packaging\sign.ps1 -Path dist\本地朗读工厂-0.3.0-win-x64
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\bookctl.iss /DMyVersion=0.3.0
 ```
 
+| 形态 | 目录 / 压缩包 | 体积（实测 2026-11-24） | 目标机要求 |
+|---|---|---|---|
+| 标准便携版 | `dist\本地朗读工厂-0.3.0-win-x64\` · `.zip` | **475 MB / 198 MB** | 无（GUI + CLI 全自包含） |
+| Slim 轻量版 | `dist\本地朗读工厂-0.3.0-win-x64-slim\` · `.zip` | **200 MB / 78 MB** | GUI 无；CLI/MCP/Worker 需 .NET 10 运行时 |
+
+Slim 省在哪：三个命令行工具改 framework-dependent（省掉 3 份 .NET 运行时 ≈236 MB）+ 删掉本项目不加载的
+`onnxruntime.dll` / `DirectML.dll`（41 MB）。多语言 MUI 仅 3.4 MB，评估后不裁（`docs/defects.md` #19）。
+
 - 便携版：程序目录内有 `portable.marker` → 数据写 `data\`、模型写 `sources\`，整目录可拷到 U 盘；
 - 安装版：`PrivilegesRequired=lowest` 的 per-user 安装，删除 marker，数据走 `%LOCALAPPDATA%\bookctl`；
-- 签名：支持 PFX / 证书指纹（EV USB Key）/ Azure Trusted Signing 三种，全部带 RFC3161 时间戳。
+- 签名：支持 PFX / 证书指纹（EV USB Key）/ Azure Trusted Signing 三种，全部带 RFC3161 时间戳；
+- **发布前必做**：真机双击 `BookCtl.App.exe` 确认能出窗口再发。缺陷 #20 就是"只验证了 CLI、没双击 GUI"，
+  导致此前所有免安装包都是坏的（`0xC000027B`），切勿只看 zip 生成成功；
 - 细节与发布检查清单见 [`packaging/README.md`](./packaging/README.md)。
 

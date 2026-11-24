@@ -252,6 +252,37 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void ToggleMode(bool simple) => IsSimpleMode = simple;
 
+    /// <summary>
+    /// 统一的 EPUB 导入入口：拖放 / 文件选择 / 命令行 / .epub 文件关联都走这里，
+    /// 校验、路径规范化与中控台反馈只有一份实现（v0.4 结构优化）。
+    /// </summary>
+    public bool ImportEpub(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch { NotifyImportFailed($"路径无效：{path}"); return false; }
+
+        if (!full.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
+        {
+            NotifyImportFailed("只支持 .epub 格式的电子书");
+            return false;
+        }
+        if (!File.Exists(full))
+        {
+            NotifyImportFailed($"文件不存在：{full}");
+            return false;
+        }
+
+        InputPath = full;
+        AddLocal("INFO", "import",
+            $"已导入 {Path.GetFileName(full)}（{(IsSimpleMode ? "简洁模式" : "详细参数模式")}）· 点击「生成朗读音频」开始");
+        return true;
+    }
+
+    /// <summary>导入失败只在中控台留一条 WARN，不弹窗打断用户。</summary>
+    public void NotifyImportFailed(string message) => AddLocal("WARN", "import", message);
+
     /// <summary>简洁模式：不暴露参数，直接用能跑的最小引擎（有 CPU 模型就用 sherpa，没有就 mock 校样）。</summary>
     public void StartOneClick()
     {

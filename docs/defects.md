@@ -130,3 +130,21 @@
 | WinUI 内容用 `gdigrab -i title=` 抓到空白（DirectComposition） | 用 `-i desktop` 全屏抓，配合 App `--on-top` |
 | sidecar 后台进程被 shell 回收 / Git Bash `/tmp` 与 Windows Python 路径不一致 | 同一条 shell 命令内启动 + curl + 分析 + 结束；用绝对路径 |
 | 截图工具 `Add-Type` / `Reflection.Assembly` 被安全策略拦截 | 改用 ffmpeg `gdigrab` |
+
+---
+
+## 2026-11-24 晚 · 结构 / 交互 / 分发优化（v0.4 增量）
+
+这一批不是"跑不通"，而是"能跑但难用、难找、太重"。逐条记录现象与处理，避免下一位 AI 重复判断。
+
+| # | 现象 | 根因 | 处理 |
+|---|---|---|---|
+| 13 | 用户"找不到 .exe 启动文件" | 便携包 1127 个文件平铺，`BookCtl.App.exe` 混在 859 个 dll 里；根目录无入口 | 新增根目录 `启动.cmd`（唯一 GUI 入口，按便携包 → Debug → Release 顺序找 exe，支持透传 `.epub` 与 `--detailed`）；README §2 增加「exe 在哪」表格 |
+| 14 | 只能点「浏览…」选书，路径操作繁琐 | 从未实现拖放；文件选择器是唯一导入途径 | WinUI 根容器 `AllowDrop=True` + `DragOver/Drop/DragLeave`；加入全窗口拖放提示层（`IsHitTestVisible=False` 防止事件抖动）；两种模式通用 |
+| 15 | 导入逻辑分散在 3 处（选择器 / 命令行 / 文件关联） | 各处直接写 `InputPath = ...`，校验与提示不一致 | 统一 `MainViewModel.ImportEpub(path)`：扩展名、存在性、绝对路径、中控台反馈只有一份实现；失败走 `NotifyImportFailed` 留 WARN，不弹窗 |
+| 16 | 免安装包 473 MB（zip 197 MB），"太重" | `tools/` 下 CLI/MCP/Worker 各自 `--self-contained`，同一份 .NET 运行时被复制 3 遍（239 MB）；另带本项目用不到的 `onnxruntime.dll`(23 MB) + `DirectML.dll`(18 MB) | `build-portable.ps1` 新增 `-Slim`：GUI 仍完全自包含，三个工具改 framework-dependent；裁掉未使用 ML 组件；`tools\PREREQUISITE.txt` 写明运行时要求。多语言 MUI 实测仅 3.4 MB，评估后**不裁**（见 #19） |
+| 17 | `build-portable.ps1` 直接调用裸 `dotnet`，本机不在 PATH 时打包失败 | 脚本沿用开发机早期 PATH 假设 | 脚本内解析 `C:\Program Files\dotnet\dotnet.exe`，找不到才回退 PATH |
+| 18 | `.cmd` 脚本双击执行不稳定（中文乱码/行解析失败） | 批处理内容含中文、且写成 LF 换行；cmd.exe 按 ANSI 代码页解析 | 脚本内容保持纯 ASCII（中文路径用通配符匹配），文件转 CRLF；`*.ps1` 继续保留 UTF-8 BOM（ADR-018） |
+| 19 | `-Slim` 打包在删 MUI 时抛 `InputObjectNotBound`，改完又撞宿主 `safe-delete` 阈值（≥50 文件需确认） | ① PS 5.1 的 `Remove-Item` 按属性名绑定，`FileInfo.FullName` 对不上 `-Path`；② 本机宿主把批量删除包装成 safe-delete，累计 50 次即拦截 | 先改 `ForEach-Object { Remove-Item $_.FullName }`，随后实测 MUI 只有 3.4 MB，**直接放弃裁剪**；同时把脚本开头的 `Remove-Item -Recurse $out` 改为增量覆盖，避免重跑时被拦。不绕过安全策略，改从设计上避免批量删除 |
+| 20 | **便携包双击没反应**：`BookCtl.App.exe` 启动 1 秒即退出，无窗口无提示；Debug 构建正常 | **`dotnet publish` 没有复制 WinUI 的 XAML 编译产物**：publish 目录缺 `App.xbf`、`MainWindow.xbf` 与 `BookCtl.App.pri`（2.3 MB 资源索引）。缺了它们，`Microsoft.UI.Xaml.dll` 在初始化阶段抛 stowed exception，进程以 `0xC000027B` 退出（事件日志错误模块 = Microsoft.UI.Xaml.dll，`combase.dll` E_FAIL） | 打包脚本 publish 后从 `src\BookCtl.App\bin\$Configuration\net10.0-windows10.0.19041.0\win-x64` 补齐 `*.xbf` + `BookCtl.App.pri`。修复后 slim 包实测 `RUNNING / title=[本地朗读工厂] / responding=True` |
+| 21 | 上一轮"便携模式验证 ✅"给错了结论 | 当时只验证了 `portable.marker` 路径解析与 CLI 在包内可执行，**从未真正双击 GUI**（或双击后崩溃被忽略） | 本轮回溯确认：v0.3 的标准便携包同样缺 XAML 资源、同样启动崩溃 —— 即此前交付的免安装包一直是坏的。已重跑标准包与 slim 包并逐个实测启动 |

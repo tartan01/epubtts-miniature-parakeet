@@ -17,6 +17,10 @@
 
 ## 2. 一键构建
 
+**本地最快路径**：双击仓库根目录的 `build.cmd` —— 它做「全解决方案编译 → 单独重建 App → mock 回归」三件事，
+再双击 `启动.cmd` 打开 GUI（自动找便携包或 Debug 构建里的 `BookCtl.App.exe`）。
+下面是等价的纯手动命令。
+
 ```bash
 ROOT="C:/Users/romanovsky/WorkBuddy/2026-11-23-13-38-07"
 DN="/c/Program Files/dotnet/dotnet.exe"

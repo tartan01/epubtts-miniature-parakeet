@@ -149,6 +149,31 @@
 
 ---
 
+## ADR-019 · 拖放导入与统一 ImportEpub 入口
+
+- **决策**：WinUI 根容器开启 `AllowDrop`；所有导入路径（拖放 / 文件选择器 / 命令行 / `.epub` 文件关联）
+  统一调用 `MainViewModel.ImportEpub(path)`。
+- **理由**：拖放是 Windows 用户对桌面软件的默认预期，选择器多两步；导入校验（扩展名、存在性、绝对路径）
+  分散在多处必然出现"命令行能进、拖放不能进"一类不一致。收敛成单一入口后，可测性也更好
+  （命令行 `--auto-start` 与拖放走同一段代码）。
+- **影响**：`MainWindow.xaml`（根 Grid + 拖放提示层）、`MainWindow.xaml.cs`、`MainViewModel.cs`。
+- **反面意见**：拖入后不自动开始生成——避免误拖一个文件就消耗算力；用户明确点击「生成」再执行。
+
+## ADR-020 · 双形态分发与 Slim 发布策略
+
+- **决策**：`build-portable.ps1` 保留默认（完全自包含）形态，新增 `-Slim`：
+  ① GUI 仍 self-contained（双击即用、免装运行时）；
+  ② CLI/MCP/Worker 改 framework-dependent（需 .NET 10 运行时）；
+  ③ 裁掉 `onnxruntime.dll` / `DirectML.dll`（本项目 TTS 走 Python sidecar，主程序不加载）。
+- **理由**：默认形态要满足"客户机什么都不装"；但把同一份运行时复制三遍纯属浪费（239 MB）。
+  命令行工具面向高级用户/AI 宿主，机器上大概率已有 .NET；用 `tools\PREREQUISITE.txt` 明确告知。
+- **放弃项**：多语言 MUI 实测仅 3.4 MB（172 个），裁剪收益远小于宿主 safe-delete 批量删除的代价，
+  且需绕过安全策略 —— 明确不做。以后要裁应在 publish 前控制语言白名单。
+- **代价**：Slim 版的 CLI 在无 .NET 10 的干净机器上不可用；GUI 不受影响。
+- **影响**：`packaging/build-portable.ps1`、`packaging/make-release.cmd`、README §9、缺陷 #16/#19。
+
+---
+
 ## 待拍板 / 未决
 
 | 编号 | 议题 | 状态 |

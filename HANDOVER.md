@@ -15,7 +15,12 @@
 （`book.m4b` + 每章 `audio.wav/m4a` + `manifest.json`），带实时中控台、断点续传、设备选择、模型源管理，
 并已有可发布的便携版 zip。
 
-版本：**v0.3.0**（社区版源码 / pro-portable 便携包）。当前分支应为空仓库的首次提交。
+版本：**v0.3.0**（社区版源码 / pro-portable 便携包）。远端 `main` 已推送到
+`git@github.com:tartan01/epubtts-miniature-parakeet.git`。
+
+**2026-11-24 晚增量（v0.4）**：新增 EPUB 拖放导入（两种模式通用）、统一 `ImportEpub` 入口、
+根目录 `启动.cmd` / `build.cmd` / `packaging/make-release.cmd` 三个一键脚本、
+`build-portable.ps1 -Slim` 轻量分发形态。详见 README §2/§8/§9、ADR-019/020、`docs/defects.md` #13–18。
 
 ---
 
@@ -29,7 +34,7 @@
 | ★★★ | `README.md` | 用户向说明、命令速查、实现边界、§7 已修缺陷台账 |
 | ★★ | `docs/workflows/` | 7 份流程文档：构建运行 / 流水线 / 控制面 / 设备与源 / TTS 引擎 / 封装 / 验收 |
 | ★★ | `docs/decisions/ADR.md` | 技术决策台账（选了什么、为什么、否掉了什么） |
-| ★★ | `docs/defects.md` | 12 个已修真实缺陷（含复现现象与根因） |
+| ★★ | `docs/defects.md` | 21 条缺陷/问题台账（12 个运行期缺陷 + 9 条结构/交互/分发问题，含复现现象与根因） |
 | ★★ | `docs/roadmap.md` | 未完成事项与建议推进顺序 |
 | ★★ | `docs/environment.md` | 本机环境快照、绝对路径、版本、网络限制 |
 | ★ | `docs/conversation/01-full-dialogue.md` | 本期完整对话（用户 7 轮 + 助手 112 条回复 + 系统事件） |
@@ -49,6 +54,8 @@
 
 本机 `dotnet` **不在 PATH**，必须用绝对路径 `C:\Program Files\dotnet\dotnet.exe`。
 以下命令在 Git Bash 或 PowerShell 均可（中文路径用引号）。
+
+**最快两条路**：先双击 `build.cmd`（编译 + 重建 App + mock 回归一体化），成功后双击 `启动.cmd` 打开界面。
 
 ```bash
 ROOT="C:/Users/romanovsky/WorkBuddy/2026-11-23-13-38-07"
@@ -102,6 +109,8 @@ BookCtl.App.exe "C:\...\testdata\测试之书.epub" --auto-start [--detailed] [-
 ## 3. 代码地图
 
 ```
+启动.cmd                       ← 唯一 GUI 入口（自动找便携包 / Debug / Release 的 BookCtl.App.exe）
+build.cmd                      ← 一键：全解决方案编译 + 单独重建 App + mock 回归
 bookctl.sln
 ├── src/BookCtl.Core/            ← 全部业务逻辑，GUI/CLI/MCP/Worker 共用
 │   ├── Contracts.cs             JSON envelope / 错误码 / 退出码 / BookCtlConfig
@@ -122,11 +131,11 @@ bookctl.sln
 ├── src/BookCtl.App/             WinUI 3 桌面程序
 │   ├── App.xaml                 Apple 风格全局资源（#F5F5F7 / #0071E3 / Segoe UI Variable）
 │   ├── MainWindow.xaml          双模式界面（简洁 / 详细参数）+ 结果卡 + 中控台
-│   ├── MainWindow.xaml.cs       ApplyCommandLine（--detailed / --auto-start / --on-top / .epub 关联）
+│   ├── MainWindow.xaml.cs       ApplyCommandLine + 拖放（DragOver/Drop/DragLeave + 全窗口提示层）
 │   └── MainViewModel.cs         EventBus 订阅、章节卡片实时追加、设备计划、源状态、一键兜底
 ├── engine/tts_server.py        Python sidecar：mock / sherpa / cosyvoice3 三模式
 ├── config/                     bookctl.defaults.json / sources.example.json
-├── packaging/                  build-portable.ps1 / bookctl.iss / sign.ps1 / README.md
+├── packaging/                  build-portable.ps1(-Slim) / make-release.cmd / bookctl.iss / sign.ps1 / README.md
 ├── testdata/测试之书.epub       自造 3 章中文 EPUB（2.6 KB，验收用）
 └── tools/export_session.py     会话转录 → Markdown 交接文档导出器
 ```
@@ -180,7 +189,7 @@ bookctl.sln
 | 9 | 中文路径 / EPUB `mimetype` 顺序 / zip 内反斜杠 | 测试 EPUB 用 Python `zipfile` 生成，`mimetype` 第一个且不压缩、路径统一 `/` |
 | 10 | `BOOKCTL_WORKSPACE` 一改，旧实现里模型源跟着漂移 | `SourcesRoot` 已固定为 `%LOCALAPPDATA%\bookctl\sources`（便携版由 marker 覆盖） |
 
-完整 12 个已修缺陷见 `docs/defects.md` 与 `README.md §7.1`。
+完整 21 条缺陷/问题台账见 `docs/defects.md` 与 `README.md §7.1`。
 
 ---
 
@@ -211,6 +220,9 @@ bookctl.sln
 - **P1 · 多显卡 0/1/2 实机验证**：逻辑已实现，本机只有 1 张卡。
 - **P2 · S5 ASR 回验闭环**（faster-whisper）、M4B 两遍 loudnorm、音色一致性 A/B 盲测。
 - **P2 · Pro 版差异化**：`Edition` 字段已预留，尚未做功能门禁。
+- **待拍板 · 独立轻量产品线**：用户提出“不带模型、用最高效语言重写”的轻量版。
+  建议路线 = 新增 `mini/`（Rust + Windows 内置 SAPI/WinRT 语音，零模型、单 exe、无 .NET/Python 依赖），
+  与现有 .NET 主线并存而不推倒重写；**开工前必须让用户确认路线**（见 `docs/roadmap.md` R-10）。
 
 ---
 

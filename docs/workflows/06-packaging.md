@@ -22,23 +22,34 @@
 
 ## 2. 便携版构建
 
+**一条命令出两种形态**（便携 zip + 可选安装包）：
+
+```powershell
+.\packaging\make-release.cmd            # 标准便携版（完全自包含）
+.\packaging\make-release.cmd -Slim      # 轻量便携版（CLI 工具需 .NET 10）
+```
+
+或直接调发布脚本：
+
 ```powershell
 $env:PATH = 'C:\Program Files\dotnet;' + $env:PATH
 .\packaging\build-portable.ps1 -Configuration Release -Version 0.3.0
+.\packaging\build-portable.ps1 -Configuration Release -Version 0.3.0 -Slim   # 输出 ...-slim
 ```
 
 脚本做：
-1. `dotnet publish` App → 输出根目录；
-2. `dotnet publish` CLI / MCP / Worker → `tools\<proj>\`；
+1. `dotnet publish` App → 输出根目录（self-contained，双击即用）；
+2. `dotnet publish` CLI / MCP / Worker → `tools\<proj>\`（`-Slim` 时改 framework-dependent，省 3 份运行时）；
 3. 拷贝 `config/`、`engine/`（**跳过 `.venv` / `__pycache__`**）、README、架构 MD；
 4. 创建 `portable.marker`、`sources/`、`data/`、`edition.json`；
-5. `Compress-Archive` 生成 `dist\本地朗读工厂-0.3.0-win-x64.zip`。
+5. `-Slim` 额外删掉 `onnxruntime.dll` / `DirectML.dll`（本项目不加载）并写 `tools\PREREQUISITE.txt`；
+6. `Compress-Archive -Force` 生成 `dist\本地朗读工厂-<ver>-win-x64[-slim].zip`。
 
 产物目录：
 ```
 dist\本地朗读工厂-0.3.0-win-x64\
 ├── BookCtl.App.exe          ← 双击启动（portable pro）
-├── config/  engine/  tools\BookCtl.Cli|Ccp|Worker\
+├── config/  engine/  tools\BookCtl.Cli|Mcp|Worker\
 ├── data/  sources/  portable.marker  edition.json
 └── README.md  architecture-epub2audiobook.md
 ```
@@ -53,7 +64,8 @@ dist\本地朗读工厂-0.3.0-win-x64\
    [System.IO.File]::WriteAllText($path, $edition, (New-Object System.Text.UTF8Encoding($false)))
    ```
 2. **不要先删 `dist/` 旧目录**（1100+ 文件批量删除会被安全策略拦截）。
-   改用原地增量覆盖发布，再 `Compress-Archive -Force`。等价的手动命令见 `HANDOVER.md` / 本文件 §6。
+   v0.4 起脚本已改为增量覆盖 + `Compress-Archive -Force`，不再 `Remove-Item -Recurse`；
+   需要彻底重来请手动删目录。等价的手动命令见 `HANDOVER.md` / 本文件 §6。
 
 ## 3. 安装版（Inno Setup 6）
 

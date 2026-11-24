@@ -6,7 +6,9 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Background="#F5F5F7">
+    <Grid x:Name="Root" Background="#F5F5F7"
+          AllowDrop="True"
+          DragOver="Root_DragOver" Drop="Root_Drop" DragLeave="Root_DragLeave">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -60,8 +62,8 @@
                             BorderBrush="#E8E8ED" BorderThickness="1">
                         <StackPanel Spacing="20">
                             <StackPanel Spacing="6">
-                                <TextBlock Text="选择电子书" FontSize="12" Foreground="#86868B" CharacterSpacing="60" />
-                                <TextBlock Text="支持 .epub（EPUB 2 / 3）" FontSize="14" Foreground="#1D1D1F" />
+                                <TextBlock Text="导入电子书" FontSize="12" Foreground="#86868B" CharacterSpacing="60" />
+                                <TextBlock Text="把 .epub 从桌面或文件夹直接拖进窗口，也可以点「浏览…」" FontSize="14" Foreground="#1D1D1F" TextWrapping="Wrap" />
                             </StackPanel>
 
                             <Grid ColumnSpacing="12">
@@ -70,7 +72,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBox Grid.Column="0" Text="{Binding InputPath, Mode=OneWay}" IsReadOnly="True"
-                                         PlaceholderText="尚未选择文件" CornerRadius="12" Padding="16,12" FontSize="15"
+                                         PlaceholderText="拖入 .epub，或点「浏览…」" CornerRadius="12" Padding="16,12" FontSize="15"
                                          Background="#F5F5F7" BorderThickness="0" />
                                 <Button Grid.Column="1" Content="浏览…" Click="Pick_Click" CornerRadius="999"
                                         Padding="22,12" FontSize="15" Background="White" BorderBrush="#D2D2D7"
@@ -179,14 +181,14 @@
                     <Border Grid.Column="0" Background="White" CornerRadius="24" Padding="28"
                             BorderBrush="#E8E8ED" BorderThickness="1" VerticalAlignment="Top">
                         <StackPanel Spacing="18">
-                            <TextBlock Text="输入" FontSize="12" Foreground="#86868B" CharacterSpacing="60" />
+                            <TextBlock Text="输入 · 支持从桌面直接拖入 .epub" FontSize="12" Foreground="#86868B" CharacterSpacing="60" />
                             <Grid ColumnSpacing="10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBox Grid.Column="0" Text="{Binding InputPath, Mode=OneWay}" IsReadOnly="True"
-                                         PlaceholderText="尚未选择 .epub" CornerRadius="12" Padding="14,10"
+                                         PlaceholderText="拖入 .epub，或点「浏览」" CornerRadius="12" Padding="14,10"
                                          Background="#F5F5F7" BorderThickness="0" FontSize="13" />
                                 <Button Grid.Column="1" Content="浏览" Click="Pick_Click" CornerRadius="999"
                                         Padding="18,9" FontSize="13" Background="White" BorderBrush="#D2D2D7"
@@ -302,6 +304,23 @@
                 <TextBlock Text="{Binding WorkspaceText}" FontSize="11" Foreground="#86868B" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding FooterText}" FontSize="11" Foreground="#86868B" HorizontalAlignment="Right" />
             </Grid>
+        </Border>
+
+        <!-- 拖放提示层：覆盖全窗口。IsHitTestVisible=False 保证它不拦截拖放事件，
+             否则 DragLeave/Drop 会因命中目标变化而抖动。 -->
+        <Border x:Name="DropOverlay" Grid.RowSpan="3" Visibility="Collapsed"
+                Background="#CCF0F7FF" IsHitTestVisible="False">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="420"
+                    Background="White" CornerRadius="28" Padding="56,40"
+                    BorderBrush="#0071E3" BorderThickness="2">
+                <StackPanel Spacing="12" HorizontalAlignment="Center">
+                    <TextBlock Text="↓" FontSize="54" Foreground="#0071E3" HorizontalAlignment="Center" />
+                    <TextBlock Text="松开即可导入 EPUB" FontSize="26" FontWeight="SemiBold"
+                               Foreground="#1D1D1F" HorizontalAlignment="Center" />
+                    <TextBlock Text="简洁模式 / 详细参数模式均可直接拖入" FontSize="14"
+                               Foreground="#86868B" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>
