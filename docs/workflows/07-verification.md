@@ -140,10 +140,48 @@ zip ≈196 MB，`portable.marker` 在程序根目录，`engine/` 不含 `.venv`�
 | `testdata/ws-sherpa/.../manifest.json` | 真语音产物清单 |
 | `testdata/sherpa-probe.wav` | 单句真语音试听 |
 
-## 9. 未覆盖的验证（留给接手者）
+## 9. Mini 产品线回归（v0.5，改了 `mini/` 必跑）
 
+```powershell
+MINI="dist\release\mini-portable\BookCtl.Mini.exe"
+$MINI capabilities          # 13 命令 / 8 源 / 4 模型
+$MINI device list           # 16 线程 / 盘符 / 剩余空间
+$MINI doctor                # full_cli 取决于是否装了 Full
+$MINI source list
+$MINI run --input testdata\测试之书.epub --dry-run        # 《测试之书》· 3 章 · 362 字
+$MINI run --input testdata\测试之书.epub --engine mock -o $env:TEMP\mini-reg
+```
+
+`mcp` 验收：
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | "$MINI" mcp
+# initialize → protocolVersion 2025-06-18；tools/list → 6 个 tools
+```
+
+期望（委托 Full 时）：`chapters=3 / paragraphs=14 / seconds=10.1 /
+engine=mock-via-Full / wav_bytes≈681002`；`manifest.json` 含 3 条真实章节；
+日志是 `[stage] message` 而非整行 NDJSON。**`engine` 不能是写死的 `sherpa-via-Full`、
+统计不能是 0**（缺陷 #24）。
+
+改了 `mini/setup/main.rs` 后还要跑安装/卸载闭环：
+
+```powershell
+dist\release\本地朗读工厂-Mini-0.5.0-setup.exe /S
+& "$env:LOCALAPPDATA\本地朗读工厂\Mini\Uninstall-Mini.exe" /UNINSTALL /S
+# 目录 / reg_product / reg_uninstall / lnk_start / lnk_desktop 全 False
+```
+
+> PowerShell 5.1 看中文日志乱码时先 `chcp 65001`（缺陷 #25，宿主解码问题，非程序缺陷）。
+
+## 10. 未覆盖的验证（留给接手者）
+
+- **另一台干净 Windows 跨机验收**（用户进行中，R-16）：Mini 无 .NET / 无 Python / 免管理员、
+  拖入 `.epub`、自动测速选源、装到 D 盘、卸载保留数据
 - 多显卡 0/1/2 实机切换（本机只有 1 张卡）
 - `cosyvoice3` 真实权重（需 ≥6 GB 显存）
 - `source pull` 从**干净**目录重跑，验证解包残留修复
 - 签名安装包实机安装 + SmartScreen 表现（缺证书）
 - S5 ASR 回验闭环、两遍 loudnorm、音色一致性 A/B 盲测
+- Mini 直接加载本地模型权重（R-14，当前靠委托 Full）

@@ -20,6 +20,12 @@
 - ffmpeg / ffprobe 来自 WinGet 包目录；若 `PATH` 未刷新，`AudioMaster.ResolveFfmpeg` 有目录扫描兜底。
 - 显卡：**1 张 GTX 1050 / 2GB**（算力 6.1），16 逻辑核。别假设有多卡或大显存。
 - 网络：**国内直连 GitHub Release 会 502**，下载必须走镜像回退。
+- **Rust 工具链（v0.5 mini 专用）**：`stable-x86_64-pc-windows-gnu`，装在工作区 `.rustup/` + `.cargo/`
+  （**均不入库**），`rustc` 在 `.cargo/bin/rustc.exe`。本机**没有 MSVC / Windows SDK**，
+  靠 `mini/.cargo/config.toml` 的 `rust-lld` + `link-self-contained` 自包含链接。
+  换机先跑 `packaging/install-toolchain.cmd`（rsproxy.cn 镜像），再用 `mini/_probe/probe.rs` 验证链接。
+- Windows 系统自带 `C:\Windows\System32\curl.exe` / `tar.exe` / `powershell.exe` 是 mini 的运行时依赖，
+  **不要**改成第三方 crate 或外部下载工具。
 
 ## 3. 构建与验证（每次改动后都要跑）
 
@@ -45,6 +51,21 @@ BOOKCTL_WORKSPACE="$ROOT/testdata/ws-regression" \
 
 验收基线（对照 `HANDOVER.md §7`）：3 章 / 347 字 / `book.m4b` / 3 个章节标记 / `manifest.status=completed`。
 
+**改了 `mini/` 之后（v0.5）**：
+
+```powershell
+.\mini\build.ps1                      # 编 BookCtl.Mini.exe + setup-stub.exe
+.\packaging\make-installer.ps1        # 重打两个 setup.exe
+dist\release\mini-portable\BookCtl.Mini.exe capabilities
+dist\release\mini-portable\BookCtl.Mini.exe run --input testdata\测试之书.epub --dry-run
+dist\release\mini-portable\BookCtl.Mini.exe run --input testdata\测试之书.epub --engine mock -o $env:TEMP\mini-reg
+```
+
+Mini 验收基线：`capabilities` 13 命令 / 8 源 / 4 模型；dry-run `3 章 / 362 字`；
+委托 Full 返回 `chapters=3 / paragraphs=14 / seconds=10.1 / engine=mock-via-Full`（**不能是 0 或 sherpa-via-Full**）。
+改 `mini/build.ps1` 时保持 `Invoke-Rustc()` 的 `ErrorActionPreference = "Continue"` + `Out-Null`：
+PS 5.1 会把 rustc 的 stderr warning 当终止错误，且函数 stdout 会污染返回值。
+
 ## 4. 绝对不要做的事
 
 - ❌ 不要把 `bin/`、`obj/`、`.venv/`、`dist/`、`*.m4b/m4a/wav/db/db-wal/db-shm`、模型权重（约 132MB）、日志、截图原始大图提交到仓库。`.gitignore` 已配置，改动前先确认 `git status`。
@@ -56,6 +77,14 @@ BOOKCTL_WORKSPACE="$ROOT/testdata/ws-regression" \
 - ❌ 不要把设备选择结果（`DevicePlan`）放进 `profile_hash`——换显卡不应影响产物确定性判定。
 - ❌ 不要删除 `.workbuddy/` 目录（WorkBuddy 项目数据，非缓存）。
 - ❌ 不要把 `Console.OutputEncoding` 的设置挪回 `Emit()` 里——事件流 JSONL 会先输出，导致中文乱码。UTF-8 必须在 `Main()` 开头统一。
+- ❌ **不要把 `.rustup/`、`.cargo/`、`mini/target/`、`mini/*.exe`、`dist/release/`、两个 setup.exe 提交入库**
+  （`.gitignore` 已排除）；例外只有 `mini/.cargo/config.toml`。
+- ❌ 不要在 `mini/` 里引入任何外部 crate（`serde` / `windows` / `windows-sys` 等）——mini 的价值就是零依赖、离线可构建。
+- ❌ 不要改 `mini/build.ps1` 的 UTF-8 BOM；也不要把 `rustc` 换回 MSVC 工具链（本机没装）。
+- ❌ **不要因为 PowerShell 5.1 显示中文日志乱码就去改 Mini 的输出编码**：字节本身是干净 UTF-8，
+  改编码会破坏 CLI/MCP 的 JSON envelope 契约。正确做法是 `chcp 65001`。
+- ❌ 不要在 `mini/setup/main.rs` 的 `Uninstall-*.exe` 路径里要求 payload：卸载器是 stub 头部（无 overlay），
+  必须支持**无参数双击卸载**。
 
 ## 5. 必须遵守的代码模式
 
@@ -69,7 +98,11 @@ BOOKCTL_WORKSPACE="$ROOT/testdata/ws-regression" \
 | 新增引擎 | `Engine.cs` 的 `TtsProviderFactory` + `Device.RequiredVram` 显存门槛 + `Sources.BuiltInCatalog` + `engine/tts_server.py` |
 | 音频拼接 | 用 `AudioMaster.ProbeDuration`（能读 WAV / m4a / ffprobe 兜底），不要用 `Wav.DurationOf` 读 m4a |
 | ffmpeg 调用 | 一律走 `AudioMaster.Run()`，它已处理管道死锁与超时 |
-| 文件编码 | 源码/文档 UTF-8；`.ps1`/`.iss` 带 BOM；JSON 产物无 BOM |
+| 文件编码 | 源码/文档 UTF-8；`.ps1`/`.iss` 带 BOM；JSON 产物无 BOM；`.cmd` 用 CRLF |
+| Mini CLI 新命令 | 同步 `main.rs` 的 `cli()` 分发 + `help` 文本 + `capabilities_data().commands` + README §10.2 |
+| Mini MCP 新 tool | 同步 `mcp_tool_defs()` + `mcp_call()` + `capabilities_data().mcp.tools` |
+| Mini 新下载源 | 加进 `model.rs::sources()` + `effective_urls()` 的模板映射，保持 `probe_sources()` 自动测速可用 |
+| 安装器改动 | 改 `mini/setup/main.rs` 后必须重跑 `mini\build.ps1` + `packaging\make-installer.ps1`，并实测安装/卸载闭环 |
 
 ## 6. 架构变更流程
 

@@ -506,3 +506,137 @@ GUI 四块状态卡：**① 当前阶段**（S1…S6 / 已完成）**② GPU 状
 
 见 `packaging/README.md`：`build-portable.ps1`（发布+整理+zip）、`bookctl.iss`（Inno Setup，含 .epub 关联）、
 `sign.ps1`（PFX / 证书指纹 / Azure Trusted Signing，RFC3161 时间戳）。`Edition` 字段预留 Pro 差异化。
+
+---
+
+# 附录 C · v0.5 变更：mini 轻量产品线（2026-11-24，已实现并验收）
+
+> **落地状态（2026-11-24 晚）**：本附录 C.1–C.6 的设计已全部实现并实测通过；
+> 实际文件结构见 C.3（已按落地代码修订，取代早期设计草图），验收数据见 C.7。
+> 两个一键安装包位于 `dist/release/`，路径与跨机测试步骤见 README §10。
+
+## C.1 需求变更与定位
+
+用户反馈的核心痛点：**本地使用时要自己去网上找很多镜像一个一个试**。因此 mini 不是"更简单的主线"，
+而是重新定位为 **轻量入口 + 模型自动适配/下载/选址管理器**：
+
+- 程序本体：Rust 单 exe，**零模型、无 .NET 运行时、无 Python**，目标 5–10 MB；
+- 模型：重量级 TTS 权重按需下载，**装到用户选的任意盘**（C/D/E…），与程序本体分离；
+- "保留按钮，改变体验"：GUI 仍在，但用户不再手工找镜像、不再手工拼路径；
+- 与 .NET 主线**并存**：同一个仓库、两条独立产品线、共用 CLI/MCP 契约语义，互不干扰。
+
+## C.2 两条产品线对照
+
+| | 主线（.NET / WinUI 3） | mini（Rust / Win32） |
+|---|---|---|
+| 定位 | 完整功能：sherpa/piper/GPU 引擎、M4B 母带、六阶段流水线 | 轻量入口：模型下载管理 + 系统语音兜底 |
+| 运行时 | .NET 10 + Windows App SDK | 仅 Windows 系统自带组件 |
+| 体积 | 475 MB（Slim 200 MB） | 单 exe 约 5–10 MB |
+| GUI | WinUI 3 / XAML / Apple 风格 | Win32 原生控件 / 同样浅色配色 |
+| 模型获取 | `source pull` 手动、内置 catalog | **内置多源 + 自动测速选源 + 一键装到任意盘** |
+| 语音 | Python sidecar（sherpa / piper / cosyvoice3） | SAPI 系统语音；重量级模型就绪时委托外部引擎 |
+| 安装 | 自解压 `setup.exe` | 自解压 `setup.exe`（同一套安装器代码） |
+
+## C.3 目录映射
+
+```
+mini/                                  # 独立 Rust 产品线，不引用 src/ 任何代码
+├── Cargo.toml / Cargo.lock            # 单 crate，零外部依赖（std only）；bin 名 bookctl_mini
+├── README.md                          # mini 的模块说明 / 构建 / 契约 / 已知边界
+├── .cargo/config.toml                 # rustflags: rust-lld + link-self-contained（免 MSVC/SDK）
+├── build.ps1                          # 一键编译：main.rs → BookCtl.Mini.exe，setup/main.rs → setup-stub.exe
+├── _probe/probe.rs                    # 工具链 Win32 链接探针（换机首次构建先验这个）
+├── src/
+│   ├── main.rs                        # 入口分发：GUI（默认）/ CLI / MCP；capabilities/doctor/device/source/config/run
+│   ├── win32.rs                       # 手写 Win32 FFI：kernel32/user32/comctl32/comdlg32/shell32/gdi32/advapi32
+│   ├── ui.rs                          # 原生窗口与控件、WM_TIMER 快照刷新、拖放、进度条、日志
+│   ├── model.rs                       # 运行配置 + 内置 8 源 + 4 模型 + 测速/下载/失败切源/选盘安装
+│   ├── audio.rs                       # EPUB(tar.exe) → OPF/spine/NCX → 分句 → SAPI(PowerShell System.Speech) → WAV
+│   │                                 # 另含 delegate_full()：检测到 Full 时按 CLI 契约委托真 TTS 模型
+│   └── util.rs                        # 手写极简 JSON 解析/序列化 + JSON envelope（不引入 serde）
+└── setup/
+    └── main.rs                        # 自解压安装器 stub：PE overlay payload → 解压 → HKCU → 快捷方式 → 两阶段卸载
+
+packaging/
+├── install-toolchain.cmd              # 一键装 Rust GNU 工具链（rsproxy.cn 镜像，失败回退官方）
+└── make-installer.ps1                 # 把便携包 zip 追加到 stub 尾部，产出 Mini / Full 两个 setup.exe
+```
+
+> 落地时把早期草图的 `config/json/catalog/download/install/epub/tts/wav/cli/mcp` 九个模块
+> 收敛成 `main / win32 / ui / model / audio / util` 六个：单文件职责更集中，
+> 也避免零 crate 工程里到处交叉引用。契约不变，仍是 JSON envelope + MCP stdio。
+
+## C.4 关键决策（详见 `docs/decisions/ADR.md` ADR-021 ~ 025）
+
+- **ADR-021**：mini 用 `stable-x86_64-pc-windows-gnu` + `rust-lld` 自包含链接，**零外部 crate**。
+  本机无 MSVC / Windows SDK，装 Visual Studio BuildTools 需提权且数 GB；GNU 工具链自带 CRT 与导入库，
+  `rust-lld` 即可链接，产物不依赖 VC++ Redistributable，拷到另一台 Windows 直接跑。
+- **ADR-022**：语音用 **SAPI COM 直接调用**（系统自带），不引入 .NET / Python；模型就绪时按
+  `config.json` 委托重量级引擎。系统语音音质弱于 sherpa，定位是"零依赖兜底"。
+- **ADR-023**：**程序与模型分离**。程序装 `%LOCALAPPDATA%\本地朗读工厂\`，模型根由用户选盘，
+  路径写入配置；换盘/换机只需改一个字段。
+- **ADR-024**：安装器自研（Rust overlay 自解压），**不依赖 Inno Setup**（本机未装，winget 安装需提权）。
+  写 HKCU 产品信息 + `Uninstall` 卸载项 + `.epub` 关联 + 开始菜单/桌面快捷方式。
+- **ADR-025**：**双 release 都产出 setup.exe**；重量级主线源码、便携包、既有产物完整保留，不做破坏性改动。
+
+## C.5 下载管理器契约
+
+- **内置多源（落地为 8 个）**：`github` / `gh-proxy` / `ghfast` / `ghproxy-net` / `gitmirror` /
+  `hf-mirror` / `huggingface` / `custom`（用户自定义模板）；每个源记录 `id / 名称 / 说明 / 测速延迟`。
+- **自动适配**：`probe_sources()` 用系统 `curl.exe` 对候选源做 HEAD/小范围 GET 测速，按延迟排序，
+  GUI「自动测速选源」按钮直接把最快源写进下拉框；用户也可手动指定 `preferred_source`。
+- **进度与异常**：`Progress { state / source / downloaded / total / speed / eta / pct / message }`
+  实时回调到进度条与日志；下载用 `curl.exe -L --fail --retry 1 --connect-timeout 10 -C -`，
+  轮询 `.part` 文件大小算速度与 ETA；连接失败 / 超时 / 404 → 明确文案提示 +
+  **自动切下一个源**（`install_model()` 遍历 `effective_urls()`）。
+- **资源定位**：「打开模型目录」= `ShellExecuteW("open", 模型根)`，直接跳到模型文件所在文件夹；
+  GUI 另有「打开输出文件夹」跳到有声书产物目录。
+- **选盘**：`GetLogicalDriveStringsW`（注意 Drive 单数，拼错会链接失败）+ `GetDiskFreeSpaceExW`
+  枚举所有盘并显示剩余空间；`model_root_for(letter)` 生成 `<盘符>:\本地朗读工厂模型`。
+
+## C.6 安装器契约（两个 release 共用）
+
+- 单 exe = Rust stub + 尾部 overlay：`BCTLPKG1` magic + 8 字节长度 + 便携包 zip 字节；
+  PE 允许 overlay 数据，这是 7z SFX / NSIS 的标准做法，不破坏可执行性。
+- 运行时：读自身 `current_exe()` → 定位 overlay → 解压到目标目录 → 写注册表 → 建快捷方式。
+- 注册表（HKCU，**不需要管理员**）：
+  - `HKCU\Software\本地朗读工厂\{Mini|Full}`：`InstallPath` / `Version` / `ModelRoot` / `Edition`
+  - `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\本地朗读工厂 Mini`：
+    `DisplayName` / `DisplayVersion` / `Publisher` / `UninstallString` / `InstallLocation` / `EstimatedSize`
+  - `.epub` 关联：`HKCU\Software\Classes\…` + `Applications\<exe>\shell\open\command`
+- 程序装到用户目录，模型仍按用户在界面里选的盘存放；卸载保留用户数据（与 Inno Setup 版一致）。
+- **两阶段卸载**：卸载器 stub 本身位于待删除目录内，Windows 不允许删除运行中的 exe。
+  故第一次运行把自己复制到 `%TEMP%\Uninstall-<Edition>.exe`，由副本 `/UNINSTALL /FROM_TMP`
+  等待 600ms 后删目录、注册表项、开始菜单与桌面两处快捷方式。
+  `Uninstall-*.exe` **无参数双击也必须能卸载**（按文件名前缀判定，见缺陷 #26），
+  「程序和功能」则走注册表里显式 `/UNINSTALL /S` 的 `UninstallString`。
+
+## C.7 落地验收（2026-11-24 晚，实测数字）
+
+| 项 | 结果 |
+|---|---|
+| Rust 工具链 | `stable-x86_64-pc-windows-gnu`（rsproxy 镜像），`rust-lld` 自包含链接；probe.exe 872,960 B 跑通 `win32-link-ok` |
+| Mini 主程序 | `BookCtl.Mini.exe` **616,960 B（603 KB）**，零外部 crate / 零 .NET / 零 Python / 零 VC++ 运行库 |
+| CLI 契约 | `capabilities`(13 命令/8 源/4 模型)、`device list`(16 线程/1 盘)、`doctor`、`source list`、`config path` 全部 JSON envelope 正常 |
+| MCP 契约 | `initialize` → `protocolVersion=2025-06-18`；`tools/list` → 6 tools（source_list/probe/pull、config_show、book_inspect、job_start） |
+| EPUB 解析 | `《测试之书》· 3 章 · 362 字`（dry-run） |
+| 系统语音路径 | SAPI 真实生成 `status=completed` / 3 章 / 14 段 / **94.56 s** / `wav_bytes=8,340,024`；产出 `book.wav` + 3 分章 WAV + manifest + chapters.txt |
+| 委托 Full 路径 | 检测到 `HKCU\...\Full\CliPath` → 委托 Full CLI；修复后返回 `chapters=3 / paragraphs=14 / seconds=10.1 / engine=mock-via-Full / wav_bytes≈681,002`，manifest 含 3 条真实章节 |
+| 安装器 stub | 369,664 B；两个 setup.exe：Mini **722,886 B（0.7 MB）**、Full **206,942,031 B（197.4 MB）** |
+| Mini 静默安装 | `%LOCALAPPDATA%\本地朗读工厂\Mini`；HKCU 产品信息 / Uninstall 项 / `.epub` 关联 / 开始菜单 + 桌面快捷方式全部核验 |
+| 卸载闭环 | 两阶段卸载后 `dir / reg_product / reg_uninstall / lnk_start / lnk_desktop` 全为 False；重装后 `version=0.5.0` |
+| Full 静默安装 | `exit=0`（11.5 s）；`BookCtl.App.exe` + `tools\BookCtl.Cli\bookctl.exe` 存在、`portable.marker` 已删、注册表 `CliPath` 已写 |
+
+**委托链路的三条修复（v0.5 收尾）**：① 事件流不再把整行 NDJSON 灌进日志，改为
+`[stage] message` + `segment_done` 驱动进度条；② 从 Full 自己的 `manifest.json` 读真实
+`totals.chapters / totals.audio_seconds / engine.name / chapters[]`，`engine` 标签按真实引擎
+动态生成（如 `mock-via-Full`），不再硬编码 `sherpa-via-Full`；③ 产物字节数改为递归统计。
+
+> **PowerShell 5.1 中文日志乱码**：实测 Full 与 Mini 的 stdout/stderr **字节均为干净 UTF-8**，
+> 乱码是 PowerShell 5.1 用 GBK 解码子进程 stderr 的宿主显示问题，不是程序缺陷。
+> `chcp 65001` 或 `[Console]::OutputEncoding = [Text.Encoding]::UTF8` 即正常；
+> GUI 与 stdout 的 JSON 信封不受影响。已写入 `help` 与便携包 `使用说明.txt`。
+
+> **已知边界**：Mini 自身不加载任意本地模型权重。检测到 Full 时委托 Full CLI 用真 TTS 模型；
+> 未检测到 Full 时用 Windows 自带 SAPI 语音；两者都不可用则生成明确标注的占位音。
+> 「模型已下载但 Full 未安装」时仍不能直接调权重，需补齐推理适配层（见 `docs/roadmap.md` R-14）。

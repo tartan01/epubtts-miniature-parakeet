@@ -9,28 +9,33 @@
 |---|---|---|
 | `../HANDOVER.md` | **总入口**：现状 / 5 分钟跑起来 / 代码地图 / 已知坑 / 实测基线 / 下一步 | 第一个读 |
 | `../AGENTS.md` | **仓库级 AI 约定**：构建命令、禁止事项、代码模式、文档同步清单 | 动手改代码前 |
-| `../architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3） | 设计变更时 |
+| `../architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3 + **附录 C v0.5 mini**） | 设计变更时 |
 | `../architecture-epub2audiobook.html` | 架构可视化评审版（浏览器打开） | 评审时 |
-| `../README.md` | 用户向说明、命令速查、实现边界、§7.1 缺陷台账 | 查命令 / 对外说明 |
-| `environment.md` | **本机环境快照**：绝对路径、版本、网络限制、安全策略 | 任何路径/版本问题 |
-| `decisions/ADR.md` | 18 条技术决策 + 5 个未决议题 | "为什么这么设计" |
-| `defects.md` | 21 条缺陷/问题台账（12 个运行期缺陷 + 9 条结构/分发问题；现象 → 根因 → 修法 → 验证）+ 工程坑 | 遇到诡异现象 |
-| `roadmap.md` | P0/P1/P2 待办 + 本期已完成存档 + 建议第一步 | 决定做什么 |
+| `../README.md` | 用户向说明、命令速查、实现边界、§7.1 缺陷台账、**§10 Mini 与跨机测试** | 查命令 / 对外说明 |
+| `environment.md` | **本机环境快照**：绝对路径、版本、网络限制、安全策略、Rust 工具链 | 任何路径/版本问题 |
+| `decisions/ADR.md` | 26 条技术决策（含 mini 的 ADR-021~026）+ 未决议题 | "为什么这么设计" |
+| `defects.md` | 26 条缺陷/问题台账（含 mini 的 #22–#26；现象 → 根因 → 修法 → 验证）+ 工程坑 | 遇到诡异现象 |
+| `roadmap.md` | P0/P1/P2 待办（R-13 已落地；R-14/15/16 待办）+ 本期已完成存档 + 建议第一步 | 决定做什么 |
 | `conversation/01-full-dialogue.md` | 本期完整对话（7 轮用户 / 112 条助手回复 / 10 条系统事件） | 追溯用户原话 |
 | `conversation/02-context-summaries.md` | 3 次上下文压缩的历史摘要 | 补齐折叠内容 |
 | `conversation/03-action-ledger.md` | 493 次工具调用全量台账 | 追溯改过哪些文件、跑过哪些命令 |
+| `conversation/04-v05-handoff.md` | **v0.5 收尾对话与决策摘要**（用户原话、按时间顺序行动、7 项决策、错误修复、待办） | 接手 v0.5 时 |
 | `worklog/2026-11-23.md` | Day 1 工作记忆：调研 + 架构评审稿 | 追溯 Day 1 |
-| `worklog/2026-11-24.md` | Day 2 工作记忆：实现 / 编译 / 验收 / v0.3 / 真语音 | 追溯 Day 2 |
+| `worklog/2026-11-24.md` | Day 2 工作记忆：实现 / 编译 / 验收 / v0.3 / 真语音 / v0.4 | 追溯 Day 2 |
+| `worklog/2026-11-24-v05.md` | **v0.5 Mini 产品线收尾**：Rust 工具链、委托链路修复、安装包/卸载验收、跨机测试指引 | 接手 mini 时 |
 | `workflows/01-build-and-run.md` | 环境、构建、GUI/CLI/MCP 三种运行、故障排查 | 跑起来 |
 | `workflows/02-pipeline.md` | 六阶段流水线、状态机、checkpoint、产物契约 | 改流水线 |
 | `workflows/03-control-plane.md` | CLI 命令表、MCP tools、envelope、编码、便携模式判定 | 改接口 |
 | `workflows/04-device-and-sources.md` | 设备决策、源管理、分布式推理结论 | 改设备/源 |
 | `workflows/05-tts-engines.md` | 三档引擎、sidecar 协议、模型安装、GPU 适配点 | 改引擎 |
-| `workflows/06-packaging.md` | 便携版 / 安装版 / 签名 / 发布检查清单 | 发版 |
-| `workflows/07-verification.md` | 验收流程 + 实测基线（回归测试手册） | 每次改动后 |
+| `workflows/06-packaging.md` | 便携版 / 安装版 / 签名 / **mini 两个 setup.exe** / 发布检查清单 | 发版 |
+| `workflows/07-verification.md` | 验收流程 + 实测基线（含 Mini 回归手册） | 每次改动后 |
 | `screenshots/01-simple-mode.png` | 简洁模式界面 | UI 对照 |
 | `screenshots/02-detailed-mode.png` | 详细参数模式界面 | UI 对照 |
 | `screenshots/03-simple-result-sherpa.png` | 真语音一键完成的结果卡 + 章节卡片 | UI 对照 |
+| `screenshots/07-mini-ui.png` | Mini Win32 GUI 初版 | UI 对照 |
+| `screenshots/08-mini-ui-fixed.png` | Mini GUI 日志换行修复后 | UI 对照 |
+| `screenshots/09-mini-installed.png` | Mini 安装版启动界面 | UI 对照 |
 | `../tools/export_session.py` | 会话转录 → 上述 conversation 文档的导出器 | 重新导出对话 |
 
 ## 文档维护约定

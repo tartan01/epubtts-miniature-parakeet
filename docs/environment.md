@@ -27,6 +27,9 @@
 | gh CLI | **未安装** | |
 | SSH 配置 | `C:\Users\romanovsky\.ssh\config` | `Host github.com` → `IdentityFile ~/.ssh/mainstationkey_ed25519`，`IdentitiesOnly yes` |
 | 目标仓库 | `git@github.com:tartan01/epubtts-miniature-parakeet.git` | SSH 认证已验证可达（`git ls-remote` 返回 0） |
+| **Rust（mini）** | `.rustup\` + `.cargo\`（工作区内，**均不入库**）；`rustc` = `.cargo\bin\rustc.exe` | `stable-x86_64-pc-windows-gnu`；`rustup-init 1.29.3`；经 `rsproxy.cn` 镜像安装 |
+| **MSVC / Windows SDK** | ❌ 本机未安装 | 靠 `mini\.cargo\config.toml` 的 `rust-lld` + `link-self-contained=yes` 自包含链接 |
+| 系统 curl / tar / PowerShell | `C:\Windows\System32\curl.exe`、`tar.exe`、`WindowsPowerShell\v1.0\powershell.exe` | Mini 的运行时依赖（下载 / 解 EPUB / SAPI 合成），Windows 自带 |
 
 ## 3. 构建产物路径（Debug）
 
@@ -40,8 +43,28 @@
 | 便携版目录 | `dist\本地朗读工厂-0.3.0-win-x64\` |
 | 便携版 zip | `dist\本地朗读工厂-0.3.0-win-x64.zip`（≈196 MB） |
 | 便携版 CLI | `dist\本地朗读工厂-0.3.0-win-x64\tools\BookCtl.Cli\bookctl.exe` |
+| **Mini 主程序** | `dist\release\mini-portable\BookCtl.Mini.exe`（616,960 B） |
+| **安装器 stub** | `dist\release\setup-stub.exe`（369,664 B） |
+| **Mini 一键安装包** | `dist\release\本地朗读工厂-Mini-0.5.0-setup.exe`（722,886 B） |
+| **Full 一键安装包** | `dist\release\本地朗读工厂-Full-0.3.0-setup.exe`（206,942,031 B） |
+| Mini 便携 zip | `dist\release\本地朗读工厂-Mini-0.5.0-portable.zip`（≈345 KB） |
 
-> 生成这些产物需要本机编译；**仓库里不含 bin/ 内容**，clone 后按 `docs/workflows/01-build-and-run.md` 重建。
+> 生成这些产物需要本机编译；**仓库里不含 bin/ 内容**，`dist/` 与 `dist/release/` 也被 `.gitignore` 排除。
+> clone 后按 `docs/workflows/01-build-and-run.md` 重建 .NET 主线，
+> 按 `packaging/install-toolchain.cmd` → `mini/build.ps1` → `packaging/make-installer.ps1` 重建 Mini。
+> 跨机测试只需拷两个 `*-setup.exe`。
+
+## 3.1 安装后的用户目录（v0.5）
+
+| 项 | 路径 |
+|---|---|
+| Mini 程序目录 | `%LOCALAPPDATA%\本地朗读工厂\Mini\` |
+| Full 程序目录 | `%LOCALAPPDATA%\本地朗读工厂\Full\` |
+| Mini 配置 | `%LOCALAPPDATA%\本地朗读工厂\config.json`（`BookCtl.Mini.exe config path`） |
+| 模型根（用户选盘） | 例 `D:\本地朗读工厂模型`（默认 `C:\本地朗读工厂模型`） |
+| 注册表产品信息 | `HKCU\Software\本地朗读工厂\<Mini\|Full>` |
+| 卸载项 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\本地朗读工厂 <Mini\|Full>` |
+| 卸载程序 | 安装目录下 `Uninstall-Mini.exe` / `Uninstall-Full.exe` |
 
 ## 4. 运行时数据目录（仓库外）
 
@@ -96,6 +119,10 @@
 | 各轮工作区产物（M4B / WAV / DB / 日志） | `testdata\ws-*` | ❌ |
 | 单句真语音试听 | `testdata\sherpa-probe.wav` | ❌ |
 | 便携版 zip / 目录 | `dist\` | ❌ |
+| Mini 两个 setup.exe / 便携 zip / stub | `dist\release\` | ❌（跨机测试手工拷贝） |
+| Rust 工具链 | `.rustup\` / `.cargo\` | ❌（例外：`mini\.cargo\config.toml` ✅） |
+| Rust 构建中间产物 | `mini\target\` / `mini\_probe\*.exe` / `mini\*.exe` | ❌ |
+| Mini 界面截图（07/08/09） | `docs\screenshots\07~09-*.png` | ✅ |
 | Python venv | `engine\.venv\` | ❌ |
 | 原始会话 jsonl | `C:\Users\romanovsky\.workbuddy\projects\...\08257854-....jsonl` | ❌（含宿主运行时上下文） |
 

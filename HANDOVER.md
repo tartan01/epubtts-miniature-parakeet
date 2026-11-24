@@ -15,12 +15,22 @@
 （`book.m4b` + 每章 `audio.wav/m4a` + `manifest.json`），带实时中控台、断点续传、设备选择、模型源管理，
 并已有可发布的便携版 zip。
 
-版本：**v0.3.0**（社区版源码 / pro-portable 便携包）。远端 `main` 已推送到
+版本：主线 **v0.3.0**，Mini 轻量产品线 **v0.5.0**。远端 `main` 已推送到
 `git@github.com:tartan01/epubtts-miniature-parakeet.git`。
 
 **2026-11-24 晚增量（v0.4）**：新增 EPUB 拖放导入（两种模式通用）、统一 `ImportEpub` 入口、
 根目录 `启动.cmd` / `build.cmd` / `packaging/make-release.cmd` 三个一键脚本、
-`build-portable.ps1 -Slim` 轻量分发形态。详见 README §2/§8/§9、ADR-019/020、`docs/defects.md` #13–18。
+`build-portable.ps1 -Slim` 轻量分发形态。详见 README §2/§8/§9、ADR-019/020、`docs/defects.md` #13–21。
+
+**2026-11-24 深夜增量（v0.5，本轮）**：新增 **独立 `mini/` 产品线** —— Rust / Win32 原生单 exe
+603 KB，零模型、零 .NET、零 Python；内置 8 个下载源自动测速、模型装到任意盘、检测到 Full 就委托真 TTS；
+GUI 保留全部按钮并支持拖入 `.epub` / `config.json`；CLI/MCP 契约与主线一致。
+**两个版本都封装成一键 `setup.exe`**（Mini 0.7 MB / Full 197.4 MB），安装写 HKCU 注册表、
+用户目录、快捷方式、`.epub` 关联，两阶段卸载保留用户数据。
+详见 README **§10**、架构 MD **附录 C**、ADR-021~026、`docs/defects.md` #22–#26。
+
+> 用户已明确「等一下会拿另一台电脑传过去测试」：可直接拷 `dist/release/` 下两个 setup.exe，
+> 验收步骤见 README §10.2。
 
 ---
 
@@ -30,18 +40,18 @@
 |---|---|---|
 | ★★★ | `HANDOVER.md`（本文件） | 现状、怎么跑、代码地图、坑、下一步 |
 | ★★★ | `AGENTS.md` | 仓库级 AI 工作约定：必须遵守的构建/提交/契约规则 |
-| ★★★ | `architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3）。任何设计变更先改它 |
-| ★★★ | `README.md` | 用户向说明、命令速查、实现边界、§7 已修缺陷台账 |
-| ★★ | `docs/workflows/` | 7 份流程文档：构建运行 / 流水线 / 控制面 / 设备与源 / TTS 引擎 / 封装 / 验收 |
-| ★★ | `docs/decisions/ADR.md` | 技术决策台账（选了什么、为什么、否掉了什么） |
-| ★★ | `docs/defects.md` | 21 条缺陷/问题台账（12 个运行期缺陷 + 9 条结构/交互/分发问题，含复现现象与根因） |
-| ★★ | `docs/roadmap.md` | 未完成事项与建议推进顺序 |
-| ★★ | `docs/environment.md` | 本机环境快照、绝对路径、版本、网络限制 |
+| ★★★ | `architecture-epub2audiobook.md` | **总架构唯一事实源**（v0.1 + 附录 A v0.2 + 附录 B v0.3 + **附录 C v0.5 mini**）。任何设计变更先改它 |
+| ★★★ | `README.md` | 用户向说明、命令速查、实现边界、§7 缺陷台账、**§10 Mini 与跨机测试** |
+| ★★ | `docs/workflows/` | 7 份流程文档：构建运行 / 流水线 / 控制面 / 设备与源 / TTS 引擎 / 封装（含 mini）/ 验收 |
+| ★★ | `docs/decisions/ADR.md` | 技术决策台账（ADR-001~026，含 mini 的 021~026） |
+| ★★ | `docs/defects.md` | 26 条缺陷/问题台账（含 mini 的 #22–#26；现象 → 根因 → 修法 → 验证） |
+| ★★ | `docs/roadmap.md` | 未完成事项与建议推进顺序（R-13 轻量产品线已落地；R-14/15/16 待办） |
+| ★★ | `docs/environment.md` | 本机环境快照、绝对路径、版本、网络限制（含 Rust 工具链） |
 | ★ | `docs/conversation/01-full-dialogue.md` | 本期完整对话（用户 7 轮 + 助手 112 条回复 + 系统事件） |
-| ★ | `docs/conversation/02-context-summaries.md` | 3 次上下文压缩的历史摘要（补齐全量背景） |
+| ★ | `docs/conversation/02-context-summaries.md` | 上下文压缩的历史摘要（补齐全量背景） |
 | ★ | `docs/conversation/03-action-ledger.md` | 493 次工具调用全量台账（改过哪些文件、跑过哪些命令） |
-| ★ | `docs/worklog/` | 本期工作记忆日志（按日） |
-| ★ | `docs/screenshots/` | 3 张 UI 实拍（简洁模式 / 详细模式 / 真语音结果卡） |
+| ★ | `docs/worklog/` | 本期工作记忆日志（按日；`2026-11-24-v05.md` 记 Mini 收尾） |
+| ★ | `docs/screenshots/` | UI 实拍（简洁/详细/真语音 + 拖放 + slim + **07~09 Mini 界面与安装版**） |
 | ★ | `architecture-epub2audiobook.html` | 架构可视化评审版（浏览器打开） |
 | ★ | `engine/README.md`、`packaging/README.md` | 引擎层与封装层说明 |
 
@@ -136,12 +146,28 @@ bookctl.sln
 ├── engine/tts_server.py        Python sidecar：mock / sherpa / cosyvoice3 三模式
 ├── config/                     bookctl.defaults.json / sources.example.json
 ├── packaging/                  build-portable.ps1(-Slim) / make-release.cmd / bookctl.iss / sign.ps1 / README.md
+│                               + install-toolchain.cmd / make-installer.ps1（mini）
 ├── testdata/测试之书.epub       自造 3 章中文 EPUB（2.6 KB，验收用）
 └── tools/export_session.py     会话转录 → Markdown 交接文档导出器
+
+mini/                           ← v0.5 独立 Rust 产品线（不引用 src/ 任何代码）
+├── README.md                   mini 的模块说明 / 构建 / 契约 / 已知边界
+├── .cargo/config.toml          rust-lld + link-self-contained（免 MSVC/SDK）
+├── Cargo.toml / Cargo.lock     单 crate、零外部依赖
+├── build.ps1                   编 BookCtl.Mini.exe + setup-stub.exe
+├── _probe/probe.rs             Win32 链接探针（换机先验）
+├── src/main.rs                 GUI/CLI/MCP 入口分发 + capabilities/doctor/device/source/config/run
+├── src/win32.rs                手写 Win32 FFI（kernel32/user32/comctl32/comdlg32/shell32/gdi32/advapi32）
+├── src/ui.rs                   原生窗口、WM_TIMER 快照刷新、拖放、进度条、日志
+├── src/model.rs                运行配置 + 8 下载源 + 4 模型 + 测速/下载/切源/选盘
+├── src/audio.rs                EPUB→SAPI WAV；delegate_full() 委托 Full CLI
+├── src/util.rs                 手写 JSON 解析/序列化 + envelope（无 serde）
+└── setup/main.rs               自解压安装器（PE overlay → HKCU → 快捷方式 → 两阶段卸载）
 ```
 
 **依赖方向**：`Core` 不依赖任何上层；`Cli/Mcp/Worker/App` 全部只引用 `Core` 的 `BookCtlHandlers`。
-新增能力优先加在 `Core`，四个入口自动获得。
+新增能力优先加在 `Core`，四个入口自动获得。**`mini/` 是故意独立的第二条产品线**：
+Rust/std only，不引用 `src/`，只通过 CLI 契约与 Full 主线通信（注册表 `CliPath` → `bookctl.exe run`）。
 
 ---
 
@@ -171,6 +197,14 @@ bookctl.sln
    国内直连 GitHub Release 502，必须镜像回退（用户 mirrors → `BOOKCTL_MIRROR` → `gh-proxy.com` / `hf-mirror.com`）。
 6. **设备不参与 `profile_hash`**：换显卡不应改变产物确定性判定。
 7. **简洁模式不是另一套流水线**：只是写会话配置后调用同一个 `JobStart`。
+8. **v0.5 新增独立 `mini/` 产品线**（用户已拍板 A 路线）：Rust + Win32 原生，零外部 crate、
+   零 .NET/Python、单 exe 603 KB；用 `rust-lld` 自包含链接避开 MSVC/SDK。与主线**并存不推倒重写**。
+9. **Mini 是「轻量入口」而非另一套推理引擎**：内置 8 源自动测速 + 模型装到任意盘；
+   检测到 Full 就按 CLI 契约委托真 TTS 模型，没装 Full 用系统 SAPI 兜底。
+10. **两个版本都自研 overlay 自解压 `setup.exe`**（不依赖 Inno Setup）：写 HKCU、用户目录、
+    快捷方式、`.epub` 关联；卸载两阶段且保留用户模型/有声书。
+11. **PowerShell 5.1 中文日志乱码是宿主编解码问题**：实测 stdout/stderr 字节均为干净 UTF-8，
+    `chcp 65001` 即可，不要去改程序输出编码（会破坏 JSON envelope 契约）。
 
 ---
 
@@ -189,7 +223,7 @@ bookctl.sln
 | 9 | 中文路径 / EPUB `mimetype` 顺序 / zip 内反斜杠 | 测试 EPUB 用 Python `zipfile` 生成，`mimetype` 第一个且不压缩、路径统一 `/` |
 | 10 | `BOOKCTL_WORKSPACE` 一改，旧实现里模型源跟着漂移 | `SourcesRoot` 已固定为 `%LOCALAPPDATA%\bookctl\sources`（便携版由 marker 覆盖） |
 
-完整 21 条缺陷/问题台账见 `docs/defects.md` 与 `README.md §7.1`。
+完整 26 条缺陷/问题台账见 `docs/defects.md` 与 `README.md §7.1`（#22–#26 为 v0.5 Mini）。
 
 ---
 
@@ -208,6 +242,19 @@ bookctl.sln
 | 便携版 | `dist/本地朗读工厂-0.3.0-win-x64.zip` ≈196 MB；CLI `workspace=dist\...\data`、`edition=pro` |
 | UI | 简洁模式一键完成显示「3/3 章 · 347/352 字 · 已生成 1分33秒」+ 3 张章节卡片 |
 
+**v0.5 Mini 实测基线（对照用）**：
+
+| 项目 | 基线值 |
+|---|---|
+| `BookCtl.Mini.exe` | 616,960 B（603 KB），零外部 crate / 零 .NET / 零 Python |
+| CLI | `capabilities` 13 命令 / 8 源 / 4 模型；`device list` 16 线程 / 1 盘；`doctor`、`source list` 正常 |
+| MCP | `initialize` → `2025-06-18`；`tools/list` → 6 tools |
+| EPUB dry-run | `《测试之书》· 3 章 · 362 字` |
+| SAPI 真语音 | 3 章 / 14 段 / 94.56 s / `wav_bytes=8,340,024` |
+| 委托 Full | `chapters=3 / paragraphs=14 / seconds=10.1 / engine=mock-via-Full / wav_bytes≈681,002` |
+| setup.exe | Mini 722,886 B；Full 206,942,031 B |
+| 安装/卸载 | HKCU + Uninstall + `.epub` 关联 + 两处快捷方式全核验；两阶段卸载后 5 项全 False |
+
 ---
 
 ## 8. 还没做（接手后从这里开始）
@@ -220,9 +267,15 @@ bookctl.sln
 - **P1 · 多显卡 0/1/2 实机验证**：逻辑已实现，本机只有 1 张卡。
 - **P2 · S5 ASR 回验闭环**（faster-whisper）、M4B 两遍 loudnorm、音色一致性 A/B 盲测。
 - **P2 · Pro 版差异化**：`Edition` 字段已预留，尚未做功能门禁。
-- **待拍板 · 独立轻量产品线**：用户提出“不带模型、用最高效语言重写”的轻量版。
-  建议路线 = 新增 `mini/`（Rust + Windows 内置 SAPI/WinRT 语音，零模型、单 exe、无 .NET/Python 依赖），
-  与现有 .NET 主线并存而不推倒重写；**开工前必须让用户确认路线**（见 `docs/roadmap.md` R-10）。
+- **R-13 独立轻量产品线：✅ 已完成（v0.5）**。用户已拍板 A 路线，`mini/` 落地并验收，
+  两个 setup.exe 已产出。跨另一台电脑的实测由用户进行（**R-16**，步骤见 README §10.2）。
+- **R-14 · Mini 直接调用本地模型权重**：目前 Mini 只在「检测到 Full」时委托 Full CLI；
+  模型已下载但 Full 未安装时仍走 SAPI，不能直接加载权重。需先与用户确认是否接受
+  Mini 不再是「单文件零依赖」（见 `docs/roadmap.md`）。
+- **P3 · Mini GUI 视觉**：Win32 原生控件受系统主题限制，白卡对比与 Apple 风格仍弱于 WinUI 主线；
+  功能与契约均已验收，视觉可继续细化。
+- **P3 · 跨机验收**：用户准备拿另一台干净 Windows 测试两个 setup.exe；
+  重点看「无 .NET / 无 Python / 免管理员」是否真的开箱即用，以及卸载是否保留用户数据。
 
 ---
 
@@ -239,5 +292,5 @@ bookctl.sln
 
 ---
 
-**本期交接生成时间**：2026-11-24 18:5x GMT+8
+**本期交接生成时间**：2026-11-24 22:2x GMT+8（v0.5 Mini 收尾后更新）
 **目标仓库**：`git@github.com:tartan01/epubtts-miniature-parakeet.git`

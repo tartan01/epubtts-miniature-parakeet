@@ -1,5 +1,26 @@
 # 封装与分发（Pro 版：便携版 + 安装版）
 
+> **v0.5 更新**：仓库现有**两条产品线**，各有一个一键 `setup.exe`，
+> 共用自研 Rust overlay 安装器（本机未装 Inno Setup，也能打包，且**不需要管理员权限**）：
+>
+> | 安装包 | 体积 | 说明 |
+> |---|---|---|
+> | `dist\release\本地朗读工厂-Mini-0.5.0-setup.exe` | 722,886 B | Rust / Win32 轻量入口，零 .NET / Python / 模型 |
+> | `dist\release\本地朗读工厂-Full-0.3.0-setup.exe` | 206,942,031 B | 重量级 .NET 主线（复用既有便携包 zip） |
+>
+> ```powershell
+> .\packaging\install-toolchain.cmd     # 首次装 Rust GNU 工具链
+> .\mini\build.ps1                      # 编 Mini 主程序 + setup-stub.exe
+> .\packaging\make-installer.ps1        # 产出上面两个 setup.exe
+> ```
+>
+> 安装写 HKCU 产品信息 / `Uninstall` 卸载项 / `.epub` 关联 / 开始菜单 + 桌面快捷方式，
+> 装到 `%LOCALAPPDATA%\本地朗读工厂\<Mini|Full>`；卸载两阶段并保留用户模型与有声书。
+> 完整说明见 **`docs/workflows/06-packaging.md` §8**，跨机测试步骤见 **README §10.2**。
+>
+> 下面 §一~§五描述的是 **.NET 主线的 Inno Setup 便携/安装方案**，仍然有效、源码与脚本都保留；
+> 只是本轮实际交付给用户的是上表这两个自研 setup.exe。
+
 面向最终用户的两种形态，源码同一套，靠一个标记文件区分数据落点。
 
 | 形态 | 产物 | 数据位置 | 适用 |

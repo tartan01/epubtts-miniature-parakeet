@@ -79,16 +79,36 @@
 
 ---
 
-### ⬜ R-13 · 独立轻量产品线（待用户拍板，勿擅自开工）
+### ✅ R-13 · 独立轻量产品线（v0.5 已完成，用户已拍板 A 路线）
 
 - **背景**：用户提出"不带模型、用最高效的语言"重写的轻量版；现有 .NET + WinUI 3 自包含包最小也在 200 MB 量级。
-- **建议路线 A（推荐）**：新增 `mini/`，Rust + Windows 内置语音（`Windows.Media.SpeechSynthesis` / SAPI），
-  零模型权重、单 exe（数 MB）、无 .NET / Python 依赖；保留 CLI-first + JSON envelope + `job_*` 契约，
-  MCP 复用同一 exe 的 `mcp` 子命令。与现有 .NET 主线并存，不推倒重写。
-- **备选 B**：用 Rust 整体替换 .NET 主线（工作量大、要重做 WinUI 界面）。
-- **备选 C**：不换语言，只做 .NET framework-dependent + SAPI 兜底 + Slim 裁剪（已部分完成）。
-- **必须先在 A/B/C 中拍板再开工**（`docs/decisions/ADR.md` 新增一条后再动代码）。
-- **验收设想**：单本 3 章 EPUB 端到端 ≤ 3 分钟、单 exe ≤ 10 MB、干净 Windows 双击即用。
+- **采用的路线 A**：新增 `mini/`，Rust + Win32 原生 + 系统 SAPI，零模型权重、单 exe **603 KB**、
+  无 .NET / Python / VC++ 运行库；保留 JSON envelope + MCP stdio 契约，与 .NET 主线并存，不推倒重写。
+- **落地范围**：内置 8 源自动测速 / 模型装到任意盘 / 失败自动切源 / 进度与异常提示 /
+  打开模型目录 / 拖入 `.epub` 与 `config.json` / 检测到 Full 委托真 TTS / 两个一键 `setup.exe`。
+- **验收**：单本 3 章 EPUB 端到端 < 1 分钟、单 exe 603 KB、干净 Windows 双击即用（待用户跨机实测）。
+- **设计**：架构 MD 附录 C；**决策**：ADR-021~026；**缺陷**：#22–#26；**跨机步骤**：README §10.2。
+- **否掉**：B（Rust 整体替换主线，要重做 WinUI）、C（仅 .NET framework-dependent + SAPI，仍带运行时）。
+
+### ⬜ R-14 · Mini 直接调用本地模型权重（不依赖 Full）
+
+- 当前 Mini 只在「检测到 Full」时委托 Full CLI 用真 TTS 模型；**模型已下载但 Full 未安装**时仍走系统 SAPI，
+  不能直接加载权重。用户要求「自动调用 TTS 模型进行语音朗读生成」，这一层是最后的缺口。
+- 可选路径：① Mini 内嵌轻量推理（如 ONNX Runtime，但会引入 DLL、破坏零依赖）；
+  ② 单独下发一个极小的推理 sidecar exe，由 Mini 按 `config.json` 拉起；
+  ③ 明确要求用户装 Full，把「模型下载」按钮做成「先装 Full」的引导。
+- 需先与用户确认：是否接受 Mini 不再是「单文件零依赖」。
+
+### ⬜ R-15 · Mini GUI 视觉细化
+
+- Win32 原生控件受系统主题限制，白卡对比与 Apple 风格仍弱于 WinUI 主线；功能与契约均已验收。
+- 可选：自绘卡片背景 / 圆角 / 统一 Segoe UI Variable 字体 / 高 DPI 适配。
+
+### ⬜ R-16 · 另一台干净 Windows 跨机验收（用户进行中）
+
+- 用户已明确「等一下会拿另一台电脑传过去测试」。重点验证：
+  无 .NET / 无 Python / 免管理员 / 拖入 `.epub` / 自动测速选源 / 装到 D 盘 / 卸载保留数据。
+- 步骤见 README §10.2；两个安装包在 `dist/release/`（不入库，需手工拷贝）。
 
 ---
 
@@ -116,12 +136,19 @@
 | EPUB 拖放导入（简洁/详细双模式）+ 统一 ImportEpub 入口 | ✅ 2026-11-24 晚 |
 | 根目录 `启动.cmd` / `build.cmd` / `packaging/make-release.cmd` 一键入口 | ✅ 2026-11-24 晚 |
 | 便携包 `-Slim` 轻量形态（去重复运行时 / 裁未用组件） | ✅ 2026-11-24 晚 |
+| **Mini 轻量产品线 v0.5**（Rust / Win32 单 exe 603 KB、零依赖、CLI/MCP 契约） | ✅ 2026-11-24 深夜 |
+| Mini 内置 8 源自动测速 / 失败切源 / 选盘安装 / 进度与异常提示 / 打开模型目录 | ✅ 2026-11-24 深夜 |
+| Mini 委托 Full 真 TTS + 按 Full manifest 回填真实统计（缺陷 #24） | ✅ 2026-11-24 深夜 |
+| 两个一键 `setup.exe`（Mini 0.7 MB / Full 197.4 MB）+ HKCU 注册表 + 两阶段卸载 | ✅ 2026-11-24 深夜 |
+| 委托链路三项修复 + 双击卸载修复（缺陷 #24/#26）+ 乱码定性（#25） | ✅ 2026-11-24 深夜 |
 
 ---
 
 ## 建议的第一步动作（给接手 AI）
 
-1. 读 `HANDOVER.md` → `AGENTS.md` → `architecture-epub2audiobook.md`（附录 A/B）。
-2. 按 `docs/workflows/01-build-and-run.md` 跑一遍 `build` + `doctor` + mock 回归，确认基线。
-3. 问用户要签名证书参数，推进 **R-01**；或先做无需外部依赖的 **R-02 / R-10 / R-11**。
+1. 读 `HANDOVER.md` → `AGENTS.md` → `architecture-epub2audiobook.md`（附录 A/B/**C**）。
+2. 按 `docs/workflows/01-build-and-run.md` 跑一遍 `build` + `doctor` + mock 回归，确认基线；
+   Mini 另按 `AGENTS.md §3` 跑 `capabilities` / dry-run / 委托回归。
+3. **先配合用户完成 R-16 跨机验收**（用户已准备另一台电脑）；其后推进 R-01 签名，
+   或按用户意愿决定 R-14（Mini 直接调权重）是否要做。
 4. 每改一处，按 `AGENTS.md §6` 同步文档，按 `docs/workflows/07-verification.md` 回归。

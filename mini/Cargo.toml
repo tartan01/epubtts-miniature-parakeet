@@ -1,0 +1,24 @@
+# 本地朗读工厂 · Mini 轻量产品线
+# Rust / Win32 原生 / 零外部 crate / 无 .NET 运行时 / 无 Python
+#
+# 构建：packaging\make-release.cmd  或  mini\build.ps1
+# 详细见 mini/README.md 与 architecture-epub2audiobook.md 附录 C
+[package]
+name = "bookctl-mini"
+version = "0.5.0"
+edition = "2021"
+publish = false
+
+# 实际产物名是 BookCtl.Mini.exe（带点，crate 名不允许），由 build.ps1
+# 直接用 rustc 编译并指定输出名；这里的 bin 名仅供 IDE / rust-analyzer 识别。
+[[bin]]
+name = "bookctl_mini"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = false

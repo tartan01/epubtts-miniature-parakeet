@@ -58,6 +58,26 @@ sources/
 *.tar.bz2
 *.tar.gz
 
+# ---- Rust mini 产品线：工具链与构建产物（体积大，不入库）----
+.rustup/
+.cargo/
+mini/target/
+mini/*.exe
+mini/setup/target/
+mini/_probe/*.exe
+mini/_probe/*.log
+mini/_probe/*.o
+mini/_probe/rustc*/
+dist/release/
+
+# mini 的 SAPI 真语音验收产物（wav 已被上面的媒体规则排除，这里排除文本产物）
+/testdata/mini-sapi-test/
+/testdata/mini-*-test/
+
+# 例外：mini 的 Cargo 链接配置必须入库，否则换机无法构建
+!mini/.cargo/
+!mini/.cargo/config.toml
+
 # ---- 密钥 / 凭据 / 本地环境 ----
 *.pfx
 *.p12

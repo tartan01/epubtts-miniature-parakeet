@@ -17,6 +17,9 @@
 - **CLI 一等公民**：`bookctl.exe`，JSON envelope、稳定退出码、幂等、断点续传
 - **MCP 原生支持**：`bookctl-mcp.exe`（stdio，16 个 tools，含 `device_list` / `source_pull`）
 - **可封装分发**：便携版 zip + Inno Setup 安装包 + signtool 签名脚本（见 `packaging/README.md`）
+- **Mini 轻量产品线（v0.5）**：Rust / Win32 单 exe 603 KB，零模型、零 .NET、零 Python；
+  内置 8 个下载源自动测速、模型装到 C/D/E 任意盘、检测到重量级主线就委托真 TTS 模型。
+  两个版本都有一键 `setup.exe` 安装包，详见 **§10**。
 
 
 ---
@@ -39,7 +42,8 @@
 
 > **构建状态（2026-11-24 实测）**：本机已安装 .NET SDK 10.0.404，`dotnet build bookctl.sln` **全解决方案 0 error 0 warning 通过**，
 > WinUI App 已实际启动并渲染窗口；mock 引擎端到端跑通（3 章 EPUB → 分章 `audio.wav` + `audio.m4a` + 整本 `book.m4b`，含中文章节标记）。
-> 实测中发现并已修复 **21 条缺陷/问题**（12 个运行期缺陷 + 9 条结构/交互/分发问题，含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），详见 §7.1。
+> 实测中发现并已修复 **26 条缺陷/问题**（v0.3 的 12 个运行期缺陷 + v0.4 的 9 条结构/交互/分发问题
+> + v0.5 Mini 的 5 条，含 3 个"清单/文档说 A、实际跑 B"的隐蔽问题），详见 §7.1 与 `docs/defects.md`。
 
 ## 2. 构建与一键入口
 
@@ -175,6 +179,12 @@ mock 引擎全链路、GPU 监控（nvidia-smi）、WAV 拼接 + ffmpeg M4B/ffme
 其余为结构/交互/分发问题：找不到 exe（#13）、无拖放（#14）、导入逻辑分散（#15）、
 免安装包 473 MB 过重（#16）、脚本裸调 `dotnet`（#17）、`.cmd` 编码（#18）、`-Slim` 撞 safe-delete 阈值（#19）。
 
+**2026-11-24 深夜（v0.5 Mini）追加 5 条**，完整条目见 `docs/defects.md` #22–#26：
+Rust 工具链/API 拼写（#22）、GUI 日志换行与书名/进度显示（#23）、**委托 Full 返回全假数据**（#24）、
+中文日志乱码的定性（#25，宿主解码问题而非程序缺陷）、`Uninstall-*.exe` 双击卸载（#26）。
+其中 #24 最关键：`delegate_full()` 原先硬编码 `sherpa-via-Full`、统计恒为 0、把整行 NDJSON 灌进日志；
+现已按 Full 的真实 manifest 回填 `chapters/seconds/engine.name`，并按真实引擎生成标签。
+
 附带修复：幂等命中 `failed/cancelled` 旧任务时 `run` 现在会**自动 resume**（原实现会立刻返回旧状态）；
 空/纯空白分段不再送 TTS（原会白跑一次推理）；`concat_list.txt` 内路径统一为正斜杠（ffmpeg concat 里 `\` 是转义符）；
 ffmpeg 解析增加 WinGet 包目录兜底扫描（刚装完 ffmpeg、PATH 未刷新时也能找到）。
@@ -294,4 +304,79 @@ Slim 省在哪：三个命令行工具改 framework-dependent（省掉 3 份 .NE
 - **发布前必做**：真机双击 `BookCtl.App.exe` 确认能出窗口再发。缺陷 #20 就是"只验证了 CLI、没双击 GUI"，
   导致此前所有免安装包都是坏的（`0xC000027B`），切勿只看 zip 生成成功；
 - 细节与发布检查清单见 [`packaging/README.md`](./packaging/README.md)。
+
+---
+
+## 10. Mini 轻量版与「拷到另一台电脑测试」
+
+v0.5 起仓库有**两条并存的产品线**：
+
+| | 重量级主线（Full） | Mini 轻量入口 |
+|---|---|---|
+| 技术 | .NET 10 / WinUI 3 / Python sidecar | Rust / Win32 原生，零外部依赖 |
+| 安装包 | `本地朗读工厂-Full-0.3.0-setup.exe` **197.4 MB** | `本地朗读工厂-Mini-0.5.0-setup.exe` **0.7 MB** |
+| 模型 | 内置源管理 + sherpa/piper/GPU 引擎 | 本体零模型；按需下载到任意盘 |
+| 语音 | 真人级音质（sherpa-onnx 等） | 系统 SAPI 兜底；装了 Full 就委托真 TTS 模型 |
+| CLI/MCP | 完整 job 化控制面 | 同一套 JSON envelope / MCP stdio 契约 |
+
+### 10.1 两个安装包在哪
+
+```
+dist\release\本地朗读工厂-Mini-0.5.0-setup.exe     ← 拿这个去另一台电脑（0.7 MB）
+dist\release\本地朗读工厂-Full-0.3.0-setup.exe     ← 重量级版本（197.4 MB）
+dist\release\本地朗读工厂-Mini-0.5.0-portable.zip  ← 免安装便携版（解压即用）
+```
+
+> `dist/release/` 被 `.gitignore` 排除，**不会进仓库**；要从源码重建见 §10.4。
+> 拷到另一台电脑时只拷这两个 `.exe`，不需要整个仓库。
+
+### 10.2 另一台电脑验收步骤（干净 Windows 10/11，免管理员）
+
+1. 拷 `本地朗读工厂-Mini-0.5.0-setup.exe` 过去，**双击**（或 `setup.exe /S` 静默）。
+   安装到 `%LOCALAPPDATA%\本地朗读工厂\Mini`，写 HKCU 注册表、开始菜单/桌面快捷方式、`.epub` 关联。
+   **不需要 .NET、不需要 Python、不需要 VC++ 运行库、不需要管理员权限**。
+2. 双击桌面「本地朗读工厂 Mini」，把任意 `.epub` 从桌面**直接拖进窗口**。
+3. 「运行配置」区选设备（自动 / CPU / GPU / 混合）与显卡序号，或「导入配置」读 `config.json`。
+4. 「模型下载管理」区选盘符（C/D/E…），点「自动测速选源」让软件自己挑最快线路，
+   再点「安装 / 下载模型」；断网或某个源失败会自动切下一个源并显示进度。
+5. 点「打开模型目录」直接定位模型文件夹；点「一键生成朗读」，完成后「打开输出文件夹」。
+   > 干净机器只有系统 SAPI 语音；想要真人级音质，再装 `本地朗读工厂-Full-0.3.0-setup.exe`，
+   > Mini 会自动检测到并通过 CLI 契约委托 Full 的 TTS 引擎（无需手工配置路径）。
+6. 卸载：开始菜单 → 「程序和功能」→ 本地朗读工厂 Mini，或双击安装目录下的
+   `Uninstall-Mini.exe`。**会保留已下载的模型与已生成的有声书**。
+
+命令行 / 大模型接入（同一套 JSON envelope）：
+
+```powershell
+BookCtl.Mini.exe capabilities        # 能力清单
+BookCtl.Mini.exe device list         # 运行环境 / 盘符 / 剩余空间
+BookCtl.Mini.exe source list         # 8 个内置源 + 4 个模型
+BookCtl.Mini.exe source probe sherpa-vits-zh-fanchen   # 自动测速
+BookCtl.Mini.exe source pull sherpa-vits-zh-fanchen --root D:\本地朗读工厂模型
+BookCtl.Mini.exe run --input 书.epub --device auto --pretty
+BookCtl.Mini.exe mcp                # MCP stdio（6 个 tools）
+BookCtl.Mini.exe doctor             # 环境自检
+```
+
+> **PowerShell 5.1 看中文日志乱码**：`chcp 65001` 或
+> `[Console]::OutputEncoding = [Text.Encoding]::UTF8` 即可。字节本身是干净 UTF-8，
+> GUI 与 stdout 的 JSON 信封不受影响。
+
+### 10.3 从源码重建（换机开发）
+
+```powershell
+.\packaging\install-toolchain.cmd     # 一键装 Rust GNU 工具链（rsproxy 镜像）
+.\mini\build.ps1                      # 编 BookCtl.Mini.exe + setup-stub.exe
+.\packaging\make-installer.ps1        # 产出两个 setup.exe（Full 复用既有便携包 zip）
+```
+
+本机没有 MSVC / Windows SDK，用 `rust-lld` 自包含链接，产物不依赖 VC++ Redistributable。
+`mini\_probe\probe.rs` 是换机首次构建时验证 Win32 可链接的最小探针。
+
+### 10.4 目录与唯一事实源
+
+- `mini/` 六个源码模块：`main / win32 / ui / model / audio / util`，另 `mini/setup/main.rs` 是自解压安装器。
+- 总架构唯一事实源：`architecture-epub2audiobook.md` **附录 C**（v0.5 设计 + C.7 实测验收）。
+- 交接细节见 [`HANDOVER.md`](./HANDOVER.md) §3 代码地图、`docs/workflows/06-packaging.md`、
+  `docs/defects.md` #22–#26。
 

@@ -174,6 +174,74 @@
 
 ---
 
+## ADR-021 · 新增独立 `mini/` 产品线（用户拍板 A 路线）
+
+- **决策**：不推倒重写 .NET 主线，新增 Rust / Win32 原生 `mini/` 作为第二条产品线；
+  零外部 crate、零 .NET、零 Python，单 exe 目标 5–10 MB（实测 **603 KB**）。
+- **理由**：用户要求「不带模型的轻量化版本、用最高效语言重写、Windows 支持高效简洁语言」；
+  同时要保留重量级版本。两条线并存、共用 CLI/MCP 契约语义，风险最低。
+- **工具链**：本机无 MSVC / Windows SDK / VC++ Redistributable；装 BuildTools 需提权且数 GB。
+  改用 `stable-x86_64-pc-windows-gnu` + `rust-lld` + `link-self-contained=yes`
+  （`mini/.cargo/config.toml`），产物拷到另一台干净 Windows 直接跑。
+- **否掉**：B（Rust 整体替换主线，要重做 WinUI）、C（仅 .NET framework-dependent + SAPI，仍带运行时）。
+- **影响**：`mini/`、`packaging/install-toolchain.cmd`、架构 MD 附录 C、README §10。
+
+## ADR-022 · Mini 的语音路径：系统 SAPI 兜底 + 委托 Full 真 TTS
+
+- **决策**：Mini 自身**不加载任意模型权重**。检测到 Full（注册表 `CliPath` 或邻近 `tools\`）
+  就通过 CLI 契约 `bookctl.exe run` 委托真 TTS 模型；未检测到 Full 用 Windows 自带
+  `System.Speech.Synthesis.SpeechSynthesizer`（经 PowerShell 脚本）逐段合成 WAV 并拼接分章有声书；
+  两者都不可用则生成明确标注的占位音。
+- **理由**：Mini 的价值是「零依赖轻量入口」，塞推理引擎就失去意义；
+  而用户要求的「自动调用 TTS 模型」通过委托 Full 实现，无需 Mini 自己带权重。
+- **代价 / 已知边界**：模型已下载但 Full 未安装时仍走 SAPI，不能直接调权重（见 roadmap R-14）。
+- **影响**：`mini/src/audio.rs` 的 `generate_book()` / `delegate_full()` / `synth_sapi()`。
+
+## ADR-023 · 程序与模型分离、选盘安装
+
+- **决策**：程序装 `%LOCALAPPDATA%\本地朗读工厂\<Mini|Full>`；模型根由用户在 GUI 选盘
+  （`GetLogicalDriveStringsW` + `GetDiskFreeSpaceExW` 枚举并显示剩余空间），
+  `model_root_for(letter)` → `<盘符>:\本地朗读工厂模型`，写进 `config.json`。
+- **理由**：重量级 TTS 权重动辄数百 MB，用户要能放到 D/E 盘；换盘/换机只改一个字段。
+- **影响**：`mini/src/model.rs`、`mini/src/ui.rs` 的盘符下拉与「打开模型目录」按钮。
+
+## ADR-024 · 内置多源 + 自动测速 + 失败自动切源
+
+- **决策**：内置 8 个源（`github / gh-proxy / ghfast / ghproxy-net / gitmirror / hf-mirror /
+  huggingface / custom`）；`probe_sources()` 用系统 `curl.exe` 测速排序，
+  GUI「自动测速选源」直接选最快；`install_model()` 按 `effective_urls()` 遍历，
+  失败/超时/404 明确提示后自动切下一个源；`Progress` 回调显示字节/速度/ETA/百分比。
+- **理由**：用户核心痛点就是「自己去网上找很多镜像一个一个试」，国内直连 GitHub Release 会 502。
+- **影响**：`mini/src/model.rs`、GUI 的源/模型/盘符控件与进度条。
+
+## ADR-025 · 自研 overlay 自解压安装器，双 release 都出 setup.exe
+
+- **决策**：单 exe = Rust stub + 尾部 overlay（`<payload zip><len:u64 LE><magic "BCTLPKG1">`）。
+  运行时读自身尾部 → 解压到用户目录 → 写 HKCU 产品信息 / `Uninstall` 卸载项 / `.epub` 关联 /
+  开始菜单 + 桌面快捷方式。**Mini 与 Full 共用同一套 stub**；Full 载荷复用既有便携包 zip，
+  重量级主线源码与产物完整保留。
+- **理由**：本机未装 Inno Setup、winget 安装需提权；PE overlay 是 7z SFX / NSIS 的标准做法。
+  用 HKCU 而非 HKLM，**不需要管理员权限**。
+- **两阶段卸载**：卸载器 stub 位于待删目录内，Windows 不允许删除运行中的 exe；
+  先复制自身到 `%TEMP%`，由副本等待后删目录/注册表/两处快捷方式，保留用户模型与有声书。
+  `Uninstall-*.exe` 无参数双击也必须能卸载（缺陷 #26）。
+- **影响**：`mini/setup/main.rs`、`packaging/make-installer.ps1`；产物 `dist/release/*-setup.exe`。
+
+## ADR-026 · 委托链路按 Full 的真实产物回填，不改 JSON 输出编码
+
+- **决策**：`delegate_full()` 解析 Full 的 NDJSON 事件流，只输出 `[stage] message` 人类可读进度
+  并用 `segment_done` 驱动 GUI 进度条；完成后读 Full 自己的 `manifest.json`，
+  用 `totals.chapters / totals.audio_seconds / engine.name / chapters[]` 回填 Mini 的
+  `Summary` 与 manifest；`engine` 标签按真实引擎动态生成（`mock-via-Full` / `sherpa-via-Full`）。
+- **理由**：初版把整行 NDJSON 灌进日志、硬编码 `sherpa-via-Full`、统计恒为 0，
+  在 `--engine mock` 时给出错误信息；产物字节数只统计一层目录导致误报 57,344 B。
+- **PowerShell 5.1 中文乱码**：实测 Full 与 Mini 的 stdout/stderr **字节均为干净 UTF-8**，
+  是宿主用 GBK 解码子进程 stderr 的显示问题。**不改程序输出编码**（会破坏 CLI/MCP 的
+  JSON envelope 契约），改为在 `help` 与便携包 `使用说明.txt` 给出 `chcp 65001` 指引。
+- **影响**：`mini/src/audio.rs`、`mini/src/main.rs`、`mini/build.ps1`、缺陷 #24/#25。
+
+---
+
 ## 待拍板 / 未决
 
 | 编号 | 议题 | 状态 |
@@ -183,3 +251,5 @@
 | D-3 | S5 ASR 回验范围（全量 / 抽样 / 关闭） | 当前 `verify=skipped` |
 | D-4 | Worker 形态：内嵌 vs 独立常驻 daemon | 当前内嵌 + 独立入口并存 |
 | D-5 | 分发形态最终定稿（是否真做 Pro 功能门禁） | `Edition` 字段已预留 |
+| D-6 | Mini 是否直接加载本地模型权重（不依赖 Full） | 未做，R-14；当前靠委托 Full |
+| D-7 | 代码签名（PFX / EV / Azure Trusted Signing） | 脚本就绪，缺用户证书 |

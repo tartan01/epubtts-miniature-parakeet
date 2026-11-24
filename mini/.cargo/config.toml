@@ -1,0 +1,7 @@
+# 本机没有 MSVC / Windows SDK。用 rustup 自带的 rust-lld + self-contained
+# CRT/导入库做链接，产出不依赖 VC++ Redistributable 的独立 exe。
+[build]
+rustflags = ["-C", "linker=rust-lld", "-C", "link-self-contained=yes"]
+
+[profile.release]
+opt-level = "s"

@@ -148,3 +148,28 @@
 | 19 | `-Slim` 打包在删 MUI 时抛 `InputObjectNotBound`，改完又撞宿主 `safe-delete` 阈值（≥50 文件需确认） | ① PS 5.1 的 `Remove-Item` 按属性名绑定，`FileInfo.FullName` 对不上 `-Path`；② 本机宿主把批量删除包装成 safe-delete，累计 50 次即拦截 | 先改 `ForEach-Object { Remove-Item $_.FullName }`，随后实测 MUI 只有 3.4 MB，**直接放弃裁剪**；同时把脚本开头的 `Remove-Item -Recurse $out` 改为增量覆盖，避免重跑时被拦。不绕过安全策略，改从设计上避免批量删除 |
 | 20 | **便携包双击没反应**：`BookCtl.App.exe` 启动 1 秒即退出，无窗口无提示；Debug 构建正常 | **`dotnet publish` 没有复制 WinUI 的 XAML 编译产物**：publish 目录缺 `App.xbf`、`MainWindow.xbf` 与 `BookCtl.App.pri`（2.3 MB 资源索引）。缺了它们，`Microsoft.UI.Xaml.dll` 在初始化阶段抛 stowed exception，进程以 `0xC000027B` 退出（事件日志错误模块 = Microsoft.UI.Xaml.dll，`combase.dll` E_FAIL） | 打包脚本 publish 后从 `src\BookCtl.App\bin\$Configuration\net10.0-windows10.0.19041.0\win-x64` 补齐 `*.xbf` + `BookCtl.App.pri`。修复后 slim 包实测 `RUNNING / title=[本地朗读工厂] / responding=True` |
 | 21 | 上一轮"便携模式验证 ✅"给错了结论 | 当时只验证了 `portable.marker` 路径解析与 CLI 在包内可执行，**从未真正双击 GUI**（或双击后崩溃被忽略） | 本轮回溯确认：v0.3 的标准便携包同样缺 XAML 资源、同样启动崩溃 —— 即此前交付的免安装包一直是坏的。已重跑标准包与 slim 包并逐个实测启动 |
+
+---
+
+## 2026-11-24 深夜 · v0.5 Mini 产品线（#22–#26）
+
+这一批是新建 `mini/` 产品线过程中实测到的缺陷，含 3 条「看起来是 bug、其实不是」的判断，
+写清根因避免接手 AI 走回头路。
+
+| # | 现象 | 根因 | 处理 / 验证 |
+|---|---|---|---|
+| 22 | 官方 Rust 下载卡 4 分钟；`rustup-init.exe` 报「不是有效 Win32 应用」；`cargo` 编译报 `invalid character '.' in crate name`；链接报 `undefined symbol: GetLogicalDrivesStringsW` | ① 国内直连 static.rust-lang.org 慢；② 首次下载被中止留下 4.28 MB 残文件（完整应为 14,862,151 B）；③ crate/bin 名不允许 `.`；④ Win32 API 正确名是 `GetLogicalDriveStringsW`（Drive 单数） | 工具链改 `rsproxy.cn` 镜像（<1s）、重下完整 rustup-init；Cargo.toml 的 bin 名改 `bookctl_mini`，实际 exe 由 `build.ps1` 用 `rustc -o BookCtl.Mini.exe` 指定；API 名全局改正。probe.exe 872,960 B 跑通 `win32-link-ok screen=1920x1080 coinit_hr=0` |
+| 23 | Mini GUI 日志全挤成一行；EPUB 书名显示成 `《>测试之书》`；CLI 合成进度显示 `5 B / 14 B` | ① Windows Edit 控件换行必须 `\r\n`，只写 `\n` 不换行；② `<dc:title id="t1">` 的属性段没剥干净；③ 下载字节进度模板被误用在「段落计数」上 | `win32::append_line()` 补 `\r\n`；`between()` 后再取 `find('>')` 之后的 body；`CliReporter::progress()` 仅在 `p.total > 102400` 时按字节显示，否则显示 message 里的 `n/m`。三张截图 07/08/09 记录在 `docs/screenshots/` |
+| 24 | **委托 Full 生成时返回全假数据**：`engine="sherpa-via-Full"`（即使用 `--engine mock`）、`chapters/paragraphs/seconds=0`、`wav_bytes=57344`；日志里灌进整行 NDJSON | ① engine 标签硬编码；② 完全没读 Full 的产物，Summary 用 0 填充；③ 字节数只 `read_dir(out)` 统计一层（真实音频在多层子目录，只数到 `bookctl.db`）；④ 事件流 `BufReader.lines()` 原样 `rp.log(整行)` | `delegate_full()` 重写：解析 NDJSON 只输出 `[stage] message` + `segment_done` 驱动 `rp.progress()`；读 Full 自己的 `manifest.json`（`totals.chapters / totals.audio_seconds / engine.name / chapters[]`）回填；`engine` 动态生成；`dir_size_recursive()` 递归统计。修复后实测 `chapters=3 / paragraphs=14 / seconds=10.1 / engine=mock-via-Full / wav_bytes=681002`，Mini manifest 含 3 条真实章节 |
+| 25 | 宿主终端里委托日志中文变 `鏁存湰涔﹀凡瀹屾垚` 一类乱码 | **不是程序缺陷**：把 Mini 的 stdout/stderr 重定向到文件后按 UTF-8 解码，中文全部正确（`\xe6\x95\xb4` = 整）；是 PowerShell 5.1 用 GBK(936) 解码子进程 stderr 的**宿主显示问题**。`[Console]::OutputEncoding = [Text.Encoding]::UTF8` 后立刻正常 | 不改程序输出编码（会破坏 CLI/MCP 的 JSON envelope 契约）；在 `help` 与便携包 `使用说明.txt` 写明 `chcp 65001` / `[Console]::OutputEncoding = [Text.Encoding]::UTF8`。GUI 用 UTF-16 控件、stdout 信封为干净 UTF-8，均不受影响。见 ADR-026 |
+| 26 | 双击安装目录下的 `Uninstall-Mini.exe`（无参数）报「这不是完整的安装包（尾部缺少 payload 标记）」，卸载不执行 | 卸载器是安装器 stub 的**头部副本**（故意不带 overlay payload）；`main()` 原本只有显式 `/UNINSTALL` 才进卸载分支，无参数时掉进安装路径并校验 payload | `main()` 增加按文件名前缀判定：`Uninstall-*` 一律走卸载（「程序和功能」仍走注册表里显式 `/UNINSTALL /S`）。实测无参数双击能删目录；`/UNINSTALL /S` 静默卸载后 `dir / reg_product / reg_uninstall / lnk_start / lnk_desktop` 全为 False，重装后 `version=0.5.0` |
+
+### Mini 相关的工程坑（非产品缺陷）
+
+| 坑 | 处理 |
+|---|---|
+| PS 5.1 在 `$ErrorActionPreference='Stop'` 下把 rustc 的 stderr warning 当终止错误 | `mini/build.ps1` 的 `Invoke-Rustc()` 临时切 `Continue` + `Out-Null`，只依据 `$LASTEXITCODE` |
+| `@common` 数组不能在表达式里和 `+` 混用、函数 stdout 会污染返回值、GUI 还在运行会锁住 exe | 用 `$mainArgs` / `$stubArgs` 变量、`Out-Null`、编译前关闭 `BookCtl.Mini.exe` |
+| `reg.exe` 被宿主安全策略禁用 | 不绕过；改用 `Test-Path` 与 `[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey()` 核验 |
+| Full 便携包带 `portable.marker`，装成安装版后数据仍写程序目录 | 安装器 `extract()` 后删除 marker，数据改走 `%LOCALAPPDATA%` |
+| 非交互宿主里双击卸载会弹「卸载完成」MessageBox 并阻塞 | 自动化验收统一用 `/UNINSTALL /S`；真实桌面双击点掉弹窗即可 |
