@@ -1,5 +1,9 @@
 # 本地朗读工厂（bookctl）· Windows 本地 EPUB 有声书工厂
 
+> 🤖 **接手的 AI 请先读 [`HANDOVER.md`](./HANDOVER.md) 和 [`AGENTS.md`](./AGENTS.md)**，
+> 再看 [`docs/README.md`](./docs/README.md) 的文档地图。本期（2026-11-23 ~ 24）的完整对话、
+> 工作记忆、技术决策、已修缺陷、待办路线图与环境快照全在 `docs/` 下，**不需要追问用户历史背景**。
+
 > 产品名：**本地朗读工厂**（备选名：帅帅朗读工厂）；内部代号 `bookctl`，可执行文件保持 `bookctl.exe` / `BookCtl.App.exe`。
 > 总架构唯一事实源：[`architecture-epub2audiobook.md`](./architecture-epub2audiobook.md)。
 > 本 README 只讲「怎么构建、怎么跑、怎么打包」。代码与架构文档的目录映射见附录 A.6。
