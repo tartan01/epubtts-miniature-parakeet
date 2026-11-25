@@ -28,7 +28,7 @@
 | SSH 配置 | `C:\Users\romanovsky\.ssh\config` | `Host github.com` → `IdentityFile ~/.ssh/mainstationkey_ed25519`，`IdentitiesOnly yes` |
 | 目标仓库 | `git@github.com:tartan01/epubtts-miniature-parakeet.git` | SSH 认证已验证可达（`git ls-remote` 返回 0） |
 | GitHub Release API 凭据 | 用户临时提供的 PAT，发版时通过 `$env:GITHUB_TOKEN` 传入 | **绝不写入仓库 / 文档 / 日志**；SSH key 不能调 REST API |
-| 发行版页面 | `https://github.com/tartan01/epubtts-miniature-parakeet/releases` | `v0.6.0` 为 latest，附三个 setup.exe + 两个便携 zip |
+| 发行版页面 | `https://github.com/tartan01/epubtts-miniature-parakeet/releases` | `v0.6.0` 为 latest，5 个资产统一用 ASCII 名 `BookCtl-*` + 中文 label（GitHub 会过滤资产名里的中文） |
 | 历史版本 tag | `v0.3.0` / `v0.4.0` / `v0.5.0` / `v0.6.0` | `git push origin --tags` 已推送；`git checkout <tag>` 取该版源码 |
 | **Rust（mini）** | `.rustup\` + `.cargo\`（工作区内，**均不入库**）；`rustc` = `.cargo\bin\rustc.exe` | `stable-x86_64-pc-windows-gnu`；`rustup-init 1.29.3`；经 `rsproxy.cn` 镜像安装 |
 | **MSVC / Windows SDK** | ❌ 本机未安装 | 靠 `mini\.cargo\config.toml` 的 `rust-lld` + `link-self-contained=yes` 自包含链接 |

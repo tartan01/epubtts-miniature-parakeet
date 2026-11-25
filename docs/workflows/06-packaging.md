@@ -346,12 +346,14 @@ $env:GITHUB_TOKEN = '<PAT>'
 | query 里的中文资产名 | `[uri]::EscapeDataString($name)` 编码后再拼 URL |
 | 197 MB 的 Full 包 | 用 `curl.exe --data-binary @file` 流式上传，`--max-time 1800`；不要走 `Invoke-RestMethod` 的内存字节数组 |
 | PowerShell 里 `curl` 是 `Invoke-WebRequest` 别名 | 一律写 `curl.exe` |
+| **非 ASCII 资产名被 GitHub 过滤** | `?name=` query 与 `PATCH` 的 JSON body 都会把中文剥成 `-Mini-0.6.0-setup.exe`；Release 名统一用 ASCII `BookCtl-*`，中文显示走 `PATCH /releases/assets/{id}` 的 `label`（label 允许 Unicode） |
+| 197 MB 上传偶发 `curl (55) Connection was reset` | 脚本已加 `--retry 3 --retry-delay 2`；报错后**先查 assets 的 size**，服务端很可能已收全，别盲目重传 |
 
 ### 10.5 发布检查清单
 
 - [ ] `mini\build.ps1` + `packaging\make-installer.ps1` 已经重跑，五个发行文件齐全
 - [ ] `publish-release.ps1 -DryRun` 列出的体积与 `release-notes-v0.6.0.md` 的 SHA-256 一致
 - [ ] Release 正文写明「双击即用 / 免 .NET / 免管理员」与三个版本的差别
-- [ ] 上传后逐个核对 `browser_download_url` 可下载，并比对 SHA-256
+- [ ] 上传后逐个核对 `browser_download_url` 可下载、资产名为 `BookCtl-*`、中文 `label` 正常，并比对 SHA-256
 - [ ] `git status` 干净；四个 tag 已 `git push origin --tags`
 - [ ] 仓库里没有 `.exe` / `.zip` / `.wav` / 任何 token 被提交

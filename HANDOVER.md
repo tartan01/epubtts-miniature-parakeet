@@ -32,6 +32,12 @@
 > **认证区分**：本机 SSH 密钥（`ssh -T git@github.com` 通过）只能 `git push` 代码与 tags；
 > 创建 Release / 上传 asset 必须调 REST API，需要一个带 Contents 读写权限的 GitHub PAT。
 > 两者不是一回事，别拿 SSH key 去试 API。
+>
+> **实测坑（2026-11-25）**：GitHub Releases 会过滤资产名里的非 ASCII 字符（query 与 PATCH
+> JSON body 都会把中文剥成残域名），所以发行版资产统一叫 `BookCtl-*.exe`，中文显示走
+> `PATCH /releases/assets/{id}` 的 `label` 字段（label 允许 Unicode）。另外 197 MB 上传偶发
+> `curl (55) Connection was reset`，脚本已加 `--retry 3`；报错后先查 assets 的 size，
+> 服务端很可能已经收全，不要盲目重传。
 
 **2026-11-24 晚增量（v0.4）**：新增 EPUB 拖放导入（两种模式通用）、统一 `ImportEpub` 入口、
 根目录 `启动.cmd` / `build.cmd` / `packaging/make-release.cmd` 三个一键脚本、

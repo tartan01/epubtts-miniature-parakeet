@@ -6,13 +6,19 @@
 
 ## 该下哪一个
 
-| 下载 | 版本 | 用途 | 体积 |
+| Release 上的文件名（直接下载） | 版本 | 用途 | 体积 |
 |---|---|---|---|
-| `本地朗读工厂-阅读器-0.6.0-setup.exe` | 0.6.0 | **边看 EPUB 文字、边听当前段落朗读**，后台自动预生成后面章节；双击启动即进阅读器 | 720 KB |
-| `本地朗读工厂-Mini-0.6.0-setup.exe` | 0.6.0 | 批量模式：一键把整本 EPUB 生成有声书（零依赖轻量入口），附 CLI 与 MCP | 761 KB |
-| `本地朗读工厂-Full-0.3.0-setup.exe` | 0.3.0 | 重量级主线（.NET / WinUI 3 / Python sidecar），模型音质整本导出 | 197 MB |
-| `本地朗读工厂-Mini-0.6.0-portable.zip` | 0.6.0 | Mini 免安装便携版，解压即用 | 390 KB |
-| `本地朗读工厂-阅读器-0.6.0-portable.zip` | 0.6.0 | 阅读器免安装便携版，解压即用 | 350 KB |
+| `BookCtl-Reader-0.6.0-setup.exe` | 0.6.0 | **边看 EPUB 文字、边听当前段落朗读**，后台自动预生成后面章节；双击启动即进阅读器 | 720 KB |
+| `BookCtl-Mini-0.6.0-setup.exe` | 0.6.0 | 批量模式：一键把整本 EPUB 生成有声书（零依赖轻量入口），附 CLI 与 MCP | 761 KB |
+| `BookCtl-Full-0.3.0-setup.exe` | 0.3.0 | 重量级主线（.NET / WinUI 3 / Python sidecar），模型音质整本导出 | 197 MB |
+| `BookCtl-Mini-0.6.0-portable.zip` | 0.6.0 | Mini 免安装便携版，解压即用 | 390 KB |
+| `BookCtl-Reader-0.6.0-portable.zip` | 0.6.0 | 阅读器免安装便携版，解压即用 | 350 KB |
+
+> ⚠️ **为什么发行版文件名是英文**：GitHub Releases 会过滤掉资产名里的非 ASCII 字符
+> （实测 `?name=` query 与 `PATCH` 的 JSON body 都会把中文剥成 `-Mini-0.6.0-setup.exe` 这类残缺名）。
+> 因此发行版统一用清晰的 `BookCtl-*.exe` 名，**内容与本地构建的中文名产物完全一致**
+> （SHA-256 见下），下载后直接双击即可，不需要改名；Release 页面每个资产另带中文 label 说明。
+> 本地 `dist\release\` 下仍保留中文名产物，二者是一一对应的同一份文件。
 
 > 三个安装版**可以同时安装、互不覆盖**。想要阅读器里「整本导出…」出模型音质，
 > 建议先装 Full，再装阅读器 / Mini。
@@ -37,11 +43,11 @@
 ## 校验（SHA-256）
 
 ```
-1301509054e984f7d80e9d4ecb380c2307ec3345ad378a96e65483e4d8da209e  本地朗读工厂-Mini-0.6.0-setup.exe
-e3e24a281d871ce2142688b54443b50984dda961a4e2ce257873b2141e613202  本地朗读工厂-阅读器-0.6.0-setup.exe
-89bf512b092400feb028febfd43b05a32c9ce812adc6371ad59b6f614ecfe1d7  本地朗读工厂-Full-0.3.0-setup.exe
-ce74b6aabcbdb761db5e410ef04c0f3a86eab07c550888becc587ce774d3db9c  本地朗读工厂-Mini-0.6.0-portable.zip
-bd7a7494642ab51e1477358d2213275224534598c9f694f53947e2ec9cd6381d  本地朗读工厂-阅读器-0.6.0-portable.zip
+1301509054e984f7d80e9d4ecb380c2307ec3345ad378a96e65483e4d8da209e  BookCtl-Mini-0.6.0-setup.exe
+e3e24a281d871ce2142688b54443b50984dda961a4e2ce257873b2141e613202  BookCtl-Reader-0.6.0-setup.exe
+89bf512b092400feb028febfd43b05a32c9ce812adc6371ad59b6f614ecfe1d7  BookCtl-Full-0.3.0-setup.exe
+ce74b6aabcbdb761db5e410ef04c0f3a86eab07c550888becc587ce774d3db9c  BookCtl-Mini-0.6.0-portable.zip
+bd7a7494642ab51e1477358d2213275224534598c9f694f53947e2ec9cd6381d  BookCtl-Reader-0.6.0-portable.zip
 ```
 
 ## 已知边界

@@ -333,6 +333,10 @@ v0.6 起仓库有**两种源码线、三个安装包**：
 双击即可，不需要本仓库、不需要源码、不需要 .NET / Python / 管理员。
 Release 说明与 SHA-256 见 [`packaging/release-notes-v0.6.0.md`](./packaging/release-notes-v0.6.0.md)。
 
+> Release 上的资产名是 `BookCtl-*.exe`（GitHub 会过滤资产名里的非 ASCII 字符，
+> 实测中文名会被剥成 `-Mini-0.6.0-setup.exe`）；与本地 `dist\release\` 下的中文名产物
+> **内容完全一致**（SHA-256 相同），下载后直接双击即可、无需改名，页面另有中文 label 说明。
+
 **本地构建出来的产物**（发版前才生成）：
 
 ```

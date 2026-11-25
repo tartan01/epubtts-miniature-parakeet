@@ -33,7 +33,7 @@
 | `workflows/05-tts-engines.md` | 三档引擎、sidecar 协议、模型安装、GPU 适配点 | 改引擎 |
 | `workflows/06-packaging.md` | 便携版 / 安装版 / 签名 / **三个 setup.exe（Mini / 阅读器 / Full）** / **§10 GitHub Releases 发布** / 发布检查清单 | 发版 |
 | `../packaging/publish-release.ps1` | **一键发版**：查/建 Release、同名资产先删再传、上传三个 setup.exe + 便携 zip（需 `GITHUB_TOKEN`） | 发 Release |
-| `../packaging/release-notes-v0.6.0.md` | v0.6.0 Release 正文：该下哪一个、系统要求、SHA-256、已知边界、源码入口 | 写 Release 说明 |
+| `../packaging/release-notes-v0.6.0.md` | v0.6.0 Release 正文：该下哪一个（`BookCtl-*` ASCII 资产名 + 中文 label）、系统要求、SHA-256、已知边界、源码入口 | 写 Release 说明 |
 | `workflows/07-verification.md` | 验收流程 + 实测基线（含 Mini 回归手册） | 每次改动后 |
 | `screenshots/01-simple-mode.png` | 简洁模式界面 | UI 对照 |
 | `screenshots/02-detailed-mode.png` | 详细参数模式界面 | UI 对照 |
