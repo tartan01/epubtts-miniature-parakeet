@@ -27,6 +27,9 @@
 | gh CLI | **未安装** | |
 | SSH 配置 | `C:\Users\romanovsky\.ssh\config` | `Host github.com` → `IdentityFile ~/.ssh/mainstationkey_ed25519`，`IdentitiesOnly yes` |
 | 目标仓库 | `git@github.com:tartan01/epubtts-miniature-parakeet.git` | SSH 认证已验证可达（`git ls-remote` 返回 0） |
+| GitHub Release API 凭据 | 用户临时提供的 PAT，发版时通过 `$env:GITHUB_TOKEN` 传入 | **绝不写入仓库 / 文档 / 日志**；SSH key 不能调 REST API |
+| 发行版页面 | `https://github.com/tartan01/epubtts-miniature-parakeet/releases` | `v0.6.0` 为 latest，附三个 setup.exe + 两个便携 zip |
+| 历史版本 tag | `v0.3.0` / `v0.4.0` / `v0.5.0` / `v0.6.0` | `git push origin --tags` 已推送；`git checkout <tag>` 取该版源码 |
 | **Rust（mini）** | `.rustup\` + `.cargo\`（工作区内，**均不入库**）；`rustc` = `.cargo\bin\rustc.exe` | `stable-x86_64-pc-windows-gnu`；`rustup-init 1.29.3`；经 `rsproxy.cn` 镜像安装 |
 | **MSVC / Windows SDK** | ❌ 本机未安装 | 靠 `mini\.cargo\config.toml` 的 `rust-lld` + `link-self-contained=yes` 自包含链接 |
 | 系统 curl / tar / PowerShell | `C:\Windows\System32\curl.exe`、`tar.exe`、`WindowsPowerShell\v1.0\powershell.exe` | Mini 的运行时依赖（下载 / 解 EPUB / SAPI 合成），Windows 自带 |
@@ -56,6 +59,8 @@
 > clone 后按 `docs/workflows/01-build-and-run.md` 重建 .NET 主线，
 > 按 `packaging/install-toolchain.cmd` → `mini/build.ps1` → `packaging/make-installer.ps1` 重建 Mini。
 > 跨机测试只需拷需要的 `*-setup.exe`（三个包可同时安装，互不覆盖）。
+> **对外发布**：这些产物不入库，统一由 `packaging\publish-release.ps1` 上传到 GitHub Releases；
+> 正文与 SHA-256 见 `packaging\release-notes-v0.6.0.md`，流程见 `docs/workflows/06-packaging.md` §10。
 
 ## 3.1 安装后的用户目录（v0.5）
 

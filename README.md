@@ -3,6 +3,11 @@
 > 🤖 **接手的 AI 请先读 [`HANDOVER.md`](./HANDOVER.md) 和 [`AGENTS.md`](./AGENTS.md)**，
 > 再看 [`docs/README.md`](./docs/README.md) 的文档地图。本期（2026-11-23 ~ 24）的完整对话、
 > 工作记忆、技术决策、已修缺陷、待办路线图与环境快照全在 `docs/` 下，**不需要追问用户历史背景**。
+>
+> 📦 **分工（2026-11-25 起）**：**源码 + 全部历史版本在 git 仓库**（`main` + `v0.3.0` / `v0.4.0` /
+> `v0.5.0` / `v0.6.0` tags）；**直接下载即用的安装包在 GitHub Releases**
+> `https://github.com/tartan01/epubtts-miniature-parakeet/releases`（三个 setup.exe + 便携 zip）。
+> `dist/` 被 `.gitignore` 排除，构建产物**不入库**；发版用 `packaging\publish-release.ps1`。
 
 > 产品名：**本地朗读工厂**（备选名：帅帅朗读工厂）；内部代号 `bookctl`，可执行文件保持 `bookctl.exe` / `BookCtl.App.exe`。
 > 总架构唯一事实源：[`architecture-epub2audiobook.md`](./architecture-epub2audiobook.md)。
@@ -323,6 +328,13 @@ v0.6 起仓库有**两种源码线、三个安装包**：
 
 ### 10.1 三个安装包在哪
 
+**给别人用 / 换一台电脑**：去 GitHub Releases
+`https://github.com/tartan01/epubtts-miniature-parakeet/releases` 直接下载 setup.exe，
+双击即可，不需要本仓库、不需要源码、不需要 .NET / Python / 管理员。
+Release 说明与 SHA-256 见 [`packaging/release-notes-v0.6.0.md`](./packaging/release-notes-v0.6.0.md)。
+
+**本地构建出来的产物**（发版前才生成）：
+
 ```
 dist\release\本地朗读工厂-Mini-0.6.0-setup.exe       ← 批量模式（0.7 MB）
 dist\release\本地朗读工厂-阅读器-0.6.0-setup.exe     ← 阅读器，边看边读（0.7 MB）
@@ -334,6 +346,11 @@ dist\release\本地朗读工厂-阅读器-0.6.0-portable.zip  ← 免安装便�
 > `dist/release/` 被 `.gitignore` 排除，**不会进仓库**；要从源码重建见 §10.3。
 > 拷到另一台电脑时只拷需要的 `.exe`，不需要整个仓库。三个版本可**同时安装**互不覆盖。
 > 注意：先装 Full，再装阅读器/Mini，这样阅读器能立即检测到 Full 并用「整本导出」出模型音质。
+>
+> **重新发布**：`$env:GITHUB_TOKEN = '<PAT>'` 后跑 `.\packaging\publish-release.ps1`
+> （先 `-DryRun` 核对清单）。脚本会自动查/建 Release、同名资产先删再传、支持重复运行。
+> SSH 密钥只能 `git push`；创建 Release / 上传 asset 走 REST API，必须有 PAT。
+> 完整流程见 [`docs/workflows/06-packaging.md`](./docs/workflows/06-packaging.md) §10。
 
 ### 10.2 另一台电脑验收步骤（干净 Windows 10/11，免管理员）
 

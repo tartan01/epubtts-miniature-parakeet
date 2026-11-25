@@ -25,12 +25,15 @@
 | `worklog/2026-11-24.md` | Day 2 工作记忆：实现 / 编译 / 验收 / v0.3 / 真语音 / v0.4 | 追溯 Day 2 |
 | `worklog/2026-11-24-v05.md` | **v0.5 Mini 产品线收尾**：Rust 工具链、委托链路修复、安装包/卸载验收、跨机测试指引 | 接手 mini 时 |
 | `worklog/2026-11-24-v06.md` | **v0.6 阅读器**：段落级同步、跨章预取窗口、播放链路、第三个安装包、缓存安全 | 接手阅读器时 |
+| `worklog/2026-11-25.md` | **发布通道落地**：源码/历史 tag 入库、安装包进 Releases、PAT 认证区分、发版脚本与工程坑 | 发版 / 找安装包时 |
 | `workflows/01-build-and-run.md` | 环境、构建、GUI/CLI/MCP 三种运行、故障排查 | 跑起来 |
 | `workflows/02-pipeline.md` | 六阶段流水线、状态机、checkpoint、产物契约 | 改流水线 |
 | `workflows/03-control-plane.md` | CLI 命令表、MCP tools、envelope、编码、便携模式判定 | 改接口 |
 | `workflows/04-device-and-sources.md` | 设备决策、源管理、分布式推理结论 | 改设备/源 |
 | `workflows/05-tts-engines.md` | 三档引擎、sidecar 协议、模型安装、GPU 适配点 | 改引擎 |
-| `workflows/06-packaging.md` | 便携版 / 安装版 / 签名 / **三个 setup.exe（Mini / 阅读器 / Full）** / 发布检查清单 | 发版 |
+| `workflows/06-packaging.md` | 便携版 / 安装版 / 签名 / **三个 setup.exe（Mini / 阅读器 / Full）** / **§10 GitHub Releases 发布** / 发布检查清单 | 发版 |
+| `../packaging/publish-release.ps1` | **一键发版**：查/建 Release、同名资产先删再传、上传三个 setup.exe + 便携 zip（需 `GITHUB_TOKEN`） | 发 Release |
+| `../packaging/release-notes-v0.6.0.md` | v0.6.0 Release 正文：该下哪一个、系统要求、SHA-256、已知边界、源码入口 | 写 Release 说明 |
 | `workflows/07-verification.md` | 验收流程 + 实测基线（含 Mini 回归手册） | 每次改动后 |
 | `screenshots/01-simple-mode.png` | 简洁模式界面 | UI 对照 |
 | `screenshots/02-detailed-mode.png` | 详细参数模式界面 | UI 对照 |

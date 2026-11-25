@@ -299,3 +299,59 @@ Compress-Archive -Path (Join-Path $out '*') -DestinationPath "$root\dist\本地�
 - [ ] `--play-test` 返回 `playback_available=true`（无声卡环境可只检查该项）
 - [ ] MCP `tools/list` 是 9 个工具，且 `tools/call` 的输出只有一行 JSON（缺陷 #27）
 - [ ] 阅读器 setup.exe 安装 → 卸载 → 缓存保留 → 重装，四步全绿
+
+---
+
+## 10. 发布到 GitHub Releases（源码与发行版分离）
+
+> 2026-11-25 用户拍板：**所有源码与历史版本推到 git 仓库；已经构建好的安装文件推到 Release，
+> Release 就是直接下载即用的发行版。** 因此 `dist/` 继续被 `.gitignore` 排除，不把二进制塞进仓库。
+
+### 10.1 两个通道，别混
+
+| 通道 | 放什么 | 怎么推 |
+|---|---|---|
+| git 仓库 | 源码、脚本、文档、测试资产；**历史版本**用 tag 固定 | `git push origin main` + `git push origin --tags` |
+| GitHub Releases | 三个 `setup.exe` + 两个便携 zip（用户双击即用） | `packaging\publish-release.ps1` 走 REST API |
+
+历史版本 tag：`v0.3.0`（初始化全量源码）→ `v0.4.0`（拖放/分发）→ `v0.5.0`（Mini）→
+`v0.6.0`（阅读器）。`git checkout v0.5.0` 即可拿到该版本完整源码；GitHub 也会为每个 tag
+自动生成 `Source code (zip/tar.gz)`。
+
+### 10.2 认证：SSH key ≠ API token
+
+- 本机 SSH 密钥已配好（`ssh -T git@github.com` → `Hi tartan01!`），**只能推代码和 tag**。
+- 创建 Release、上传 asset 必须调 `api.github.com` / `uploads.github.com`，需要一个
+  **GitHub PAT**（fine-grained token 亦可，需 `Contents: read & write`）。
+- 脚本从 `$env:GITHUB_TOKEN` 读；**不要把 token 写进仓库、日志或本文档**。
+
+### 10.3 一键发布
+
+```powershell
+$env:GITHUB_TOKEN = '<PAT>'
+.\packaging\publish-release.ps1 -DryRun        # 先离线核对清单与体积
+.\packaging\publish-release.ps1                # 查/建 v0.6.0 Release 并上传 5 个资产
+.\packaging\publish-release.ps1 -SkipLarge     # 只想快发小包时跳过 197MB 的 Full
+```
+
+脚本读 `packaging\release-notes-v0.6.0.md` 当 Release 正文；参数 `-Tag / -Title / -Repo / -NotesFile`
+可改。已存在的同名资产会**先 DELETE 再上传**，所以失败重跑是安全的。
+
+### 10.4 脚本为什么这么写（工程坑）
+
+| 坑 | 处理 |
+|---|---|
+| Windows PowerShell 5.1 把无 BOM 的 `.ps1` 按 ANSI 解码，中文字符串乱码、语法直接报错 | 脚本存成 **UTF-8 带 BOM**（§4 文件编码约定） |
+| 中文文件名传给 `curl.exe` 作 `--data-binary @路径` 可能编码错 | 先复制成 `$env:TEMP\...\assetN.bin` 的纯 ASCII 临时名 |
+| query 里的中文资产名 | `[uri]::EscapeDataString($name)` 编码后再拼 URL |
+| 197 MB 的 Full 包 | 用 `curl.exe --data-binary @file` 流式上传，`--max-time 1800`；不要走 `Invoke-RestMethod` 的内存字节数组 |
+| PowerShell 里 `curl` 是 `Invoke-WebRequest` 别名 | 一律写 `curl.exe` |
+
+### 10.5 发布检查清单
+
+- [ ] `mini\build.ps1` + `packaging\make-installer.ps1` 已经重跑，五个发行文件齐全
+- [ ] `publish-release.ps1 -DryRun` 列出的体积与 `release-notes-v0.6.0.md` 的 SHA-256 一致
+- [ ] Release 正文写明「双击即用 / 免 .NET / 免管理员」与三个版本的差别
+- [ ] 上传后逐个核对 `browser_download_url` 可下载，并比对 SHA-256
+- [ ] `git status` 干净；四个 tag 已 `git push origin --tags`
+- [ ] 仓库里没有 `.exe` / `.zip` / `.wav` / 任何 token 被提交

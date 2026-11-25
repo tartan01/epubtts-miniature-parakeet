@@ -113,6 +113,8 @@ PS 5.1 会把 rustc 的 stderr warning 当终止错误，且函数 stdout 会污
 | 阅读器状态变更 | 只改 `ReaderState` 字段 + 置 `ui_dirty = true`；**绝不在持锁时调 `play_wav_sync` 或弹 MessageBox**（与 `ui.rs` 的 WM_TIMER 快照同一约定） |
 | 预取策略改动 | 改 `ReaderState::window_end()`；必须保持“至少伸进下一章前 2 段”，否则跨章会等生成 |
 | 新增安装形态 | `meta_from_self()` 按文件名判定 Edition，优先级 Reader → Mini → Full；`make-installer.ps1` 同步加一个载荷块 |
+| 发版 | 源码/历史版本只走 `git push` + tags；**安装包绝不入库**，统一用 `packaging\publish-release.ps1` 传到 GitHub Releases；改了发行文件要同步更新 `release-notes-v0.6.0.md` 的 SHA-256 |
+| 写 PowerShell 脚本 | `.ps1` 必须 **UTF-8 带 BOM**（Windows PowerShell 5.1 按 ANSI 读无 BOM 文件会中文乱码 / 语法报错，见 §4 文件编码）；读中文 `name` 参数用 `[uri]::EscapeDataString`，大文件先复制到 ASCII 临时名再交给 `curl.exe` |
 
 ## 6. 架构变更流程
 

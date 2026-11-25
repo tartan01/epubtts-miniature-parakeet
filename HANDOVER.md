@@ -18,6 +18,21 @@
 版本：主线 **v0.3.0**，Mini 轻量产品线 **v0.6.0**（含阅读器）。远端 `main` 已推送到
 `git@github.com:tartan01/epubtts-miniature-parakeet.git`。
 
+**发布通道（2026-11-25 定，接手前先看这段）**：用户明确要求「源码和历史版本放仓库、
+已经构建好的安装包放 Release（直接下载即用）」。因此：
+
+| 内容 | 位置 | 备注 |
+|---|---|---|
+| 全部源码、脚本、文档、测试资产 | git `main`（102+ 个跟踪文件） | `.gitignore` 排除 `dist/`、二进制、密钥 |
+| **历史版本** | git tags `v0.3.0` / `v0.4.0` / `v0.5.0` / `v0.6.0` | `git checkout <tag>` 即可拿出该版本完整源码 |
+| 可直接安装的发行版 | GitHub **Releases** 的 assets | 三个 setup.exe + 两个便携 zip，不入库 |
+| 发版说明 / 校验值 | `packaging/release-notes-v0.6.0.md` | 含 SHA-256 与已知边界 |
+| 一键发版脚本 | `packaging/publish-release.ps1` | `-DryRun` 离线核对；需 `GITHUB_TOKEN` |
+
+> **认证区分**：本机 SSH 密钥（`ssh -T git@github.com` 通过）只能 `git push` 代码与 tags；
+> 创建 Release / 上传 asset 必须调 REST API，需要一个带 Contents 读写权限的 GitHub PAT。
+> 两者不是一回事，别拿 SSH key 去试 API。
+
 **2026-11-24 晚增量（v0.4）**：新增 EPUB 拖放导入（两种模式通用）、统一 `ImportEpub` 入口、
 根目录 `启动.cmd` / `build.cmd` / `packaging/make-release.cmd` 三个一键脚本、
 `build-portable.ps1 -Slim` 轻量分发形态。详见 README §2/§8/§9、ADR-019/020、`docs/defects.md` #13–21。
